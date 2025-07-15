@@ -2,3 +2,5 @@ torch
 jupyterlab
 omegaconf
 numpy
+scikit-learn
+pandas
