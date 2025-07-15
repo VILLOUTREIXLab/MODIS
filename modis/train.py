@@ -1,2 +1,10 @@
-def train():
-    print("First command")
+import torch
+from omegaconf import DictConfig
+
+
+def train(
+    config: DictConfig
+):
+    print(config)
+
+
