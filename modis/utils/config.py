@@ -21,5 +21,5 @@ def validate_config(config: DictConfig) -> None:
 def load_config(config_file: str) -> DictConfig:
     """Load a configuration from config file"""
     config = OmegaConf.load(config_file)
-    # validate_config(config)
+    validate_config(config)
     return config

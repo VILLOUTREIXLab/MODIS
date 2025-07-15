@@ -16,5 +16,5 @@ generators_lr: 1e-4
 discriminator_lr: 1e-4
 beta: 5e-4
 beta1: 0.5
-lambda: 10.0
+lambda_r: 10.0
 device: auto
