@@ -130,11 +130,12 @@ class MODIS(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-        self.model_name = config.model_name
+        # self.model_name = config.model_name
+        self.modality_names = [config.modalities[idx].name for idx in range(len(config.modalities))]
         # self.container_path = os.path.join(config.checkpoint_folder, config.model_name)
         self.num_modalities = len(config.modalities)
         self.device = config.device
-        self.modality_vae = nn.ModuleList([
+        self.variational_autoencoders = nn.ModuleList([
             VAE(
                 input_size = config.modalities[i].input_size,
                 latent_size = config.latent_size,
@@ -163,7 +164,7 @@ class MODIS(nn.Module):
             d_adv, d_aux, d_hidden = zip(*(self.discriminator(latents[i].detach()) for i in range(self.num_modalities)))
             return d_adv, d_aux, d_hidden
 
-        recon_x, mu, logvar, latents = zip(*[self.modality_vae[i](x[i]) for i in range(self.num_modalities)])
+        recon_x, mu, logvar, latents = zip(*[self.variational_autoencoders[i](x[i]) for i in range(self.num_modalities)])
         d_adv, d_aux, d_hidden = zip(*[self.discriminator(latents[i]) for i in range(self.num_modalities)])
         return recon_x, mu, logvar, d_adv, d_aux, d_hidden
 
@@ -177,7 +178,7 @@ class MODIS(nn.Module):
         """
         self.eval()
         with torch.no_grad():
-            latents = self.modality_vae[input_modality].latents(x)
+            latents = self.variational_autoencoders[input_modality].latents(x)
         return latents
 
     def predict(self, x: torch.Tensor, input_modality: int) -> torch.Tensor | list[torch.Tensor, torch.Tensor]:
@@ -211,17 +212,33 @@ class MODIS(nn.Module):
         self.eval()
         with torch.no_grad():
             latents = self.get_latents(x, input_modality=input_modality)
-            recon_x = self.modality_vae[target_modality].decode(latents)
+            recon_x = self.variational_autoencoders[target_modality].decode(latents)
         return recon_x.cpu().numpy()
 
-    def load_checkpoint(self, checkpoint_file: str, verbose: bool = True) -> None:
+    def load_from_checkpoint(self, checkpoint_file: str, verbose: bool = True) -> None:
         """Load a model from a checkpoint file"""
-        if verbose:
-            print(f"Loading model checkpoint: {checkpoint_file}")
-        self.load_state_dict(torch.load(checkpoint_file, weights_only=True))
+        import pathlib
+        from modis import load_checkpoint
 
-    def load_from_state_dict(self, state_dict, verbose=True) -> None:
-        """Load a model from a state dictionary"""
+        checkpoint_data = load_checkpoint(pathlib.Path(checkpoint_file))
+        self.load_state_dict(checkpoint_data['model_state'])
         if verbose:
-            print(f"Loading model from state dict")
-        self.load_state_dict(state_dict)
+            print(f"Model loaded from {checkpoint_file}")
+
+    def load_from_state_dict(self, model_state_dict, verbose=True) -> None:
+        """Load a model from a state dictionary"""
+        self.load_state_dict(model_state_dict)
+        if verbose:
+            print(f"Model loaded from state dict")
+
+    def print_model_params(self) -> None:
+        """Detail the number of params in each module of the model"""
+        for idx, vae in enumerate(self.variational_autoencoders):
+            vae_params = sum([p.numel()for name,p in vae.named_parameters()])
+            print(f"{self.modality_names[idx]} VAE params: {vae_params}")
+
+        discriminator_params = sum([p.numel() for name,p in self.discriminator.named_parameters()])
+        print(f"Discriminator params: {discriminator_params}")
+
+        model_params = sum([p.numel() for name,p in self.named_parameters()])
+        print(f"Total model params: {model_params}")

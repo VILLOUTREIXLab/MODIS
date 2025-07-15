@@ -1,22 +1,27 @@
-import os
-import pathlib
 import time
+import pathlib
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.autograd import grad as torch_grad
 
-from omegaconf import DictConfig
+from omegaconf import OmegaConf
 
 from modis.utils.config import load_config
-from modis.utils.data import summarize_dataset
+from modis.utils.data import get_dataloaders, summarize_dataset
 from modis.utils.utils import adjust_time, accuracy
 from modis.model import MODIS
 from modis.losses import ClusteringLoss
 
 
-class ModisTrainer:
+def load_checkpoint(checkpoint_path: pathlib.Path) -> dict:
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"Checkpoint file '{checkpoint_path}' does not exist.")
+    checkpoint = torch.load(checkpoint_path)
+    return checkpoint
+
+class Trainer:
 
     def __init__(self, config):
         self.model = MODIS(config)
@@ -29,7 +34,7 @@ class ModisTrainer:
         # Optimizers
         self.optimizer = torch.optim.Adam(
             [{
-                'params': [param for vae in self.model.modality_vae for param in vae.parameters()],
+                'params': [param for vae in self.model.variational_autoencoders for param in vae.parameters()],
                 'lr': config.generators_lr
             },
             {
@@ -44,6 +49,40 @@ class ModisTrainer:
         self.ce_loss = torch.nn.CrossEntropyLoss()
         self.cluster_loss = ClusteringLoss()
 
+    def save_checkpoint(
+        self,
+        epoch: int, 
+        timestamp: str,
+        config,
+        save_path: pathlib.Path,
+        is_best: bool = False
+    ) -> pathlib.Path:
+
+        checkpoint_data = {
+            'epoch': epoch,
+            'timestamp': timestamp,
+            'config': OmegaConf.to_container(config, resolve=True),
+            'model_state': self.model.state_dict(),
+            'optimizer_state': self.optimizer.state_dict()
+        }
+
+        checkpoint_dir = save_path / "checkpoints" / config.dataset_name / config.model_name / timestamp
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+        if is_best:
+            checkpoint_file =  checkpoint_dir / f"checkpoint_best.pth"
+        else:
+            checkpoint_file =  checkpoint_dir / f"checkpoint_latest.pth"
+        torch.save(checkpoint_data, checkpoint_file)
+        # print(f"Saved checkpoint to {checkpoint_file}")
+
+        return checkpoint_file
+    
+    def load_model_and_optimizer_states(self, checkpoint_data: dict) -> None:
+        self.model.load_state_dict(checkpoint_data['model_state'])
+        self.optimizer.load_state_dict(checkpoint_data['optimizer_state'])
+        print(f"Loaded state from checkpoint")
+
     def regularization(self, x):
         total_penalty = torch.tensor(0., device=self.model.device)
         for i in range(len(x)):
@@ -51,7 +90,7 @@ class ModisTrainer:
             modal_samples.requires_grad_(True)
             
             # Obtain discriminator output
-            latents = self.model.modality_vae[i].latents(modal_samples)
+            latents = self.model.variational_autoencoders[i].latents(modal_samples)
             d_adv, _, _ = self.model.discriminator(latents)
 
             grad_output = torch.ones_like(d_adv)
@@ -80,7 +119,7 @@ class ModisTrainer:
         # -------------------
 
         for i in range(num_modalities):
-            self.model.modality_vae[i].eval()
+            self.model.variational_autoencoders[i].eval()
         self.model.discriminator.train()
 
         # Outputs
@@ -120,15 +159,18 @@ class ModisTrainer:
         d_adv_loss = torch.tensor(0., device=device)
         for i in range(num_modalities):
             fake_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != i]
-            fake_means_sum = torch.sum(torch.stack(fake_means), dim=0)
+            fake_means_sum = torch.sum(torch.stack(fake_means), dim=0)  ## average instead?
             real_loss = torch.nn.functional.relu(1 - (d_adv[i] - fake_means_sum)).mean()
 
             fake_loss = torch.tensor(0., device=device)
             for j in range(num_modalities):
                 if i == j: continue
-                real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
-                real_means_sum = torch.sum(torch.stack(real_means), dim=0)
-                fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - real_means_sum)).mean()
+                # real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
+                # real_means_sum = torch.sum(torch.stack(real_means), dim=0)
+                # fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - real_means_sum)).mean()
+
+                # Other approach
+                fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - d_adv_means[i])).mean()
 
             d_adv_loss += real_loss - fake_loss
 
@@ -159,7 +201,7 @@ class ModisTrainer:
         self.optimizer.zero_grad()
         d_train_loss.backward()
         # Zero out VAE gradients before step
-        for vae in self.model.modality_vae:
+        for vae in self.model.variational_autoencoders:
             for param in vae.parameters():
                 param.grad = None
         self.optimizer.step()
@@ -173,11 +215,11 @@ class ModisTrainer:
         matrics['d_train_aux_acc'] = d_aux_acc  ## do here or in the generator?
 
         # ---------------
-        # Train generators
+        # Train generators (VAEs)
         # ---------------
 
         for i in range(num_modalities):
-            self.model.modality_vae[i].train()
+            self.model.variational_autoencoders[i].train()
 
         self.model.discriminator.eval()
 
@@ -246,40 +288,51 @@ class ModisTrainer:
 
         return matrics
 
+import argparse
+def read_args():
+    parser = argparse.ArgumentParser(description="Training Configuration")
+    parser.add_argument('--checkpoint', type=pathlib.Path, default=None, help='Checkpoint file.')
+    args = parser.parse_args()
+    return args
+
 def train(
     train_datasets: list[torch.utils.data.DataLoader],
     config_file: str,
     data_summary: bool = True
 ):
     config = load_config(config_file)
+    args = read_args()
 
-    # Instantiate dataloaders
-    train_dataloaders = [DataLoader(dataset, batch_size=config.batch_size, drop_last=True, shuffle=True)
-                         for dataset in train_datasets]
-    
     # Variables
+    log = []
+    save_path = pathlib.Path("./saved")
     device = config.device
     timestamp = time.strftime('%Y%m%d_%H%M%S')
     init_epoch = 0
-    log = []
 
-    # Paths
-    save_path = pathlib.Path("./saved")
-    checkpoint_path = save_path / "checkpoints" / config.dataset_name / config.model_name
-    logs_path = save_path / "logs" / config.dataset_name / config.model_name
+    if args.checkpoint:
+        checkpoint_data = load_checkpoint(args.checkpoint)
+        timestamp = checkpoint_data['timestamp']
+        init_epoch = checkpoint_data['epoch']+1
+        config = OmegaConf.create(checkpoint_data['config'])
+
+    # Instantiate dataloaders
+    train_dataloaders = get_dataloaders(train_datasets, batch_size=config.batch_size, drop_last=True, shuffle=True)
 
     if data_summary:
         print("==> Summary of train datasets")
         modality_names = [m.name for m in config.modalities]
         summarize_dataset(train_dataloaders, modality_names=modality_names)
 
-    trainer = ModisTrainer(config)
+    trainer = Trainer(config)
 
     if init_epoch > 0:
+        trainer.load_model_and_optimizer_states(checkpoint_data)
         print(f"=> Resuming training on {device} device")
     else:
         print(f"==> Starting training from scratch on {device} device")
 
+    best_loss = float('inf')
     start_time = time.time()
     for epoch in range(init_epoch, init_epoch+config.num_epochs):
         metrics = []
@@ -313,6 +366,8 @@ def train(
 
         print(
             f"epoch: {epoch+1}/{init_epoch + config.num_epochs}, "
+            f"d_train_loss: {epoch_metrics['d_train_loss']:.4f}, "
+            f"d_train_aux_acc: {epoch_metrics['d_train_aux_acc']:.4f},  "
             f"recon_loss: {epoch_metrics['recon_loss']:.4f}, "
             f"kl_loss: {epoch_metrics['kl_loss']:.4f}, "
             f"d_loss: {epoch_metrics['d_loss']:.4f}, "
@@ -320,8 +375,23 @@ def train(
             f"g_loss: {epoch_metrics['g_loss']:.4f}"
         )
 
-        # 'd_train_loss', 'd_train_aux_acc', 'modal_recon_loss', 'modal_kl_loss'
-
+        is_best = epoch_metrics['g_loss'] < best_loss
+        if is_best:
+            best_loss = epoch_metrics['g_loss']
+            trainer.save_checkpoint(
+                epoch=epoch,
+                timestamp=timestamp,
+                config=config,
+                save_path=save_path,
+                is_best=True
+            )
 
     print(f"Trained {epoch-init_epoch+1} epochs in {adjust_time(time.time() - start_time)}")
     print("==> Training finished!")
+
+    trainer.save_checkpoint(
+        epoch=epoch,
+        timestamp=timestamp,
+        config=config,
+        save_path=save_path
+    )

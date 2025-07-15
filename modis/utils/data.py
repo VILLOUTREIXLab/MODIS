@@ -9,9 +9,7 @@ def get_dataloaders(
     drop_last: bool = True,
     shuffle: bool = True
 ) -> list[DataLoader]:
-    """
-    Return a dataloader for the given dataset
-    """
+    """Return a dataloader for each dataset"""
     dataloaders = [DataLoader(ds, batch_size=batch_size, drop_last=drop_last, shuffle=shuffle)
                    for ds in datasets]
     return dataloaders
@@ -45,5 +43,3 @@ def summarize_dataset(dataloaders: list[DataLoader], modality_names: list | None
     if -1 in sorted_total_samples:
         num_labeled = sum([sorted_total_samples[label] for label in sorted_total_samples if label != -1])
         print(f"Global labeled samples ratio: {round(num_labeled / sum(sorted_total_samples.values()), 3)}")
-
-    print()
