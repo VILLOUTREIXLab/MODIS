@@ -12,7 +12,6 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
-from modis import load_log
 from modis.model import MODIS
 from modis.utils.config import load_config
 from modis.utils.data import get_dataloaders, get_samples_from_dataloader
@@ -28,6 +27,7 @@ def plot_training_log(
     figsize: tuple = (15, 10)
 ) -> None:
     """Plot training log"""
+    from modis import load_log  # Import here to avoid partially initialized module error 
 
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint path {checkpoint_path} doesn't exist.")
@@ -210,11 +210,12 @@ def plot_2d_projection(
     technique: Literal['pca'] | Literal['umap'],
     data,
     labels,
-    labels_colors: str = None | list[str],
-    labels_names: str = None | list[str],
+    labels_colors:  list[str] | None = None,
+    labels_names: list[str] | None = None,
     standardize: bool = True,
     checkpoint_path: pathlib.Path = None,
-    is_best: bool = True,
+    is_train: bool | None = None,
+    is_best: bool | None = None,
     save_plot: bool = False,
     figsize: tuple = (8, 8),
     text_size: int = 20
@@ -227,8 +228,13 @@ def plot_2d_projection(
         labels_colors (None | list[str]): One hex color code for each unique class label
         labels_names (None | list[str]): One name for each unique class label
     """
-    if save_plot and not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint path {checkpoint_path} doesn't exist.")
+    if save_plot:
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"Checkpoint path {checkpoint_path} doesn't exist.")
+        if not isinstance(is_train, bool):
+            raise ValueError("Parameter is_train must be boolean type")
+        if not isinstance(is_best, bool):
+            raise ValueError("Parameter is_best must be boolean type")
 
     if standardize:
         scaler = StandardScaler()
@@ -289,10 +295,12 @@ def plot_2d_projection(
         plt.legend(loc='upper right', bbox_to_anchor=(1.4, 1), fontsize=text_size)  # bbox_to_anchor=(1.6, 1)
 
     if save_plot:
+        split_name = 'train' if is_train else 'val'
         if is_best:
-            figure_file = checkpoint_path / f"{technique}_2d_checkpoint_best.svg"
+            figure_file = checkpoint_path / split_name / f"{technique}_2d_checkpoint_best.svg"
         else:
-            figure_file = checkpoint_path / f"{technique}_2d_checkpoint_latest.svg"
+            figure_file = checkpoint_path / split_name / f"{technique}_2d_checkpoint_latest.svg"
+        figure_file.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(figure_file, format='svg', bbox_inches='tight')
         plt.close()
     else:
@@ -302,10 +310,11 @@ def plot_3d_projection(
     technique: Literal['pca', 'umap'],
     data,
     labels,
-    labels_colors: str = None | list[str],
-    labels_names: str = None | list[str],
+    labels_colors:  list[str] | None = None,
+    labels_names: list[str] | None = None,
     standardize: bool = False,
     checkpoint_path: pathlib.Path = None,
+    is_train: bool | None = None,
     is_best: bool = True,
     save_plot: bool = False,
     width: int = 800,
@@ -322,8 +331,13 @@ def plot_3d_projection(
         width (int): Width of the plot
         height (int): Height of the plot
     """
-    if save_plot and not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint path {checkpoint_path} doesn't exist.")
+    if save_plot:
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"Checkpoint path {checkpoint_path} doesn't exist.")
+        if not isinstance(is_train, bool):
+            raise ValueError("Parameter is_train must be boolean type")
+        if not isinstance(is_best, bool):
+            raise ValueError("Parameter is_best must be boolean type")
 
     if standardize:
         scaler = StandardScaler()
@@ -399,10 +413,12 @@ def plot_3d_projection(
     )
 
     if save_plot:
+        split_name = 'train' if is_train else 'val'
         if is_best:
-            figure_file = checkpoint_path / f"{technique}_3d_checkpoint_best.svg"
+            figure_file = checkpoint_path / split_name / f"{technique}_3d_checkpoint_best.svg"
         else:
-            figure_file = checkpoint_path / f"{technique}_3d_checkpoint_latest.svg"
+            figure_file = checkpoint_path / split_name / f"{technique}_3d_checkpoint_latest.svg"
+        figure_file.parent.mkdir(parents=True, exist_ok=True)
         pio.write_image(fig, figure_file)
     else:
         fig.show()
@@ -412,6 +428,7 @@ def plot_confusion_matrix(
     pred_labels,
     performance_metrics: bool = False,
     checkpoint_path: pathlib.Path = None,
+    is_train: bool | None = None,
     is_best: bool = True,
     save_plot: bool = False,
     figsize = (16, 8),
@@ -428,8 +445,13 @@ def plot_confusion_matrix(
         pred_labels (array-like of shape (n_samples,))
         performance_metrics: if True, plot recall and precision plots
     """
-    if save_plot and not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint path {checkpoint_path} doesn't exist.")
+    if save_plot:
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(f"Checkpoint path {checkpoint_path} doesn't exist.")
+        if not isinstance(is_train, bool):
+            raise ValueError("Parameter is_train must be boolean type")
+        if not isinstance(is_best, bool):
+            raise ValueError("Parameter is_best must be boolean type")
 
     metrics = calc_classification_metrics(true_labels, pred_labels)
     matrics_text = f"""
@@ -507,14 +529,16 @@ def plot_confusion_matrix(
         plt.tight_layout()
 
     if save_plot:
+        split_name = 'train' if is_train else 'val'
         if filename_suffix is None:
             suffix = ''
         else:
             suffix = f"_{filename_suffix}"
         if is_best:
-            figure_file = checkpoint_path / f"confusion_matrix_checkpoint_best{suffix}.svg"
+            figure_file = checkpoint_path / split_name / f"confusion_matrix_checkpoint_best{suffix}.svg"
         else:
-            figure_file = checkpoint_path / f"confusion_matrix_checkpoint_latest{suffix}.svg"
+            figure_file = checkpoint_path / split_name / f"confusion_matrix_checkpoint_latest{suffix}.svg"
+        figure_file.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(figure_file, format = 'svg', bbox_inches = 'tight')  ### dpi=300
         plt.close()
     else:
@@ -524,6 +548,7 @@ def checkpoint_report_plots(
     checkpoint_path: pathlib.Path,
     config_file: pathlib.Path,
     datasets: list[torch.utils.data.Dataset],
+    is_train: bool,
     use_best: bool = True,
     num_samples: int | None = None
 ) -> None:
@@ -594,6 +619,7 @@ def checkpoint_report_plots(
         labels_names = class_per_modality_names,
         standardize = False,
         checkpoint_path = checkpoint_path,
+        is_train = is_train,
         is_best = use_best,
         save_plot = True,
         text_size = 26
@@ -607,6 +633,7 @@ def checkpoint_report_plots(
         labels_names = class_per_modality_names,
         standardize = False,
         checkpoint_path = checkpoint_path,
+        is_train = is_train,
         is_best = use_best,
         save_plot = True
     )
@@ -621,6 +648,7 @@ def checkpoint_report_plots(
         class_labels_pred,
         performance_metrics = True,
         checkpoint_path = checkpoint_path,
+        is_train = is_train,
         is_best = use_best,
         save_plot = True,
         figsize = (16, 10),
@@ -632,6 +660,7 @@ def checkpoint_report_plots(
         aux_modality_class_labels_pred,
         performance_metrics = True,
         checkpoint_path = checkpoint_path,
+        is_train = is_train,
         is_best = use_best,
         save_plot = True,
         figsize = (40, 20),
@@ -645,6 +674,7 @@ def checkpoint_report_plots(
             class_labels_pred[modality_labels == i],
             performance_metrics = True,
             checkpoint_path = checkpoint_path,
+            is_train = is_train,
             is_best = use_best,
             save_plot = True,
             figsize = (16, 10),

@@ -11,10 +11,11 @@ modalities:
 training_mode: supervised
 num_classes: 5
 batch_size: 32
-num_epochs: 10
+num_epochs: 25
 generators_lr: 1e-4
 discriminator_lr: 1e-4
 beta: 5e-4
 beta1: 0.5
 lambda_r: 10.0
 device: auto
+save_checkpoint: true

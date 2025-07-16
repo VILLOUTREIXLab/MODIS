@@ -7,7 +7,6 @@ import torch
 from torch.utils.data import random_split
 
 import modis
-from modis.utils.plots import checkpoint_report_plots
 
 from src.intersim_dataset import get_datasets
 
@@ -27,12 +26,4 @@ train_datasets, val_datasets = list(zip(*[random_split(
     generator=torch.Generator().manual_seed(1234)
 ) for train_dataset in train_datasets]))
 
-checkpoint_path = modis.train(config_file, train_datasets, val_datasets, data_summary=True)
-
-checkpoint_report_plots(
-    checkpoint_path = checkpoint_path,
-    config_file = config_file,
-    datasets = train_datasets,
-    use_best = True,
-    num_samples = None
-)
+checkpoint_path = modis.train(config_file, train_datasets, val_datasets, summarize_datasets=True, report_plots=True)
