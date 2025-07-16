@@ -312,7 +312,7 @@ def train(
     train_datasets: list[torch.utils.data.DataLoader],
     config_file: str,
     data_summary: bool = True
-):
+) -> pathlib.Path:
     config = load_config(config_file)
     args = read_args()
 
@@ -405,7 +405,7 @@ def train(
     print(f"Trained {epoch-init_epoch+1} epochs in {adjust_time(time.time() - start_time)}")
     print("==> Training finished!")
 
-    trainer.save_checkpoint(
+    checkpoint_file = trainer.save_checkpoint(
         epoch = epoch,
         timestamp = timestamp,
         config = config,
@@ -413,3 +413,5 @@ def train(
         save_path = save_path,
         is_best = False
     )
+
+    return checkpoint_file.parent

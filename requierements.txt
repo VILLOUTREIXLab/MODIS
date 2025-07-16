@@ -5,3 +5,6 @@ numpy
 scikit-learn
 pandas
 matplotlib
+plotly
+kaleido
+seaborn
