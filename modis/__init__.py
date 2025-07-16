@@ -1,2 +1,1 @@
-from .train import train
-from .train import load_checkpoint
+from .train import train, load_checkpoint, load_log

@@ -1,11 +1,10 @@
+import json
 import time
 import pathlib
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
 from torch.autograd import grad as torch_grad
-
 from omegaconf import OmegaConf
 
 from modis.utils.config import load_config
@@ -17,9 +16,16 @@ from modis.losses import ClusteringLoss
 
 def load_checkpoint(checkpoint_path: pathlib.Path) -> dict:
     if not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint file '{checkpoint_path}' does not exist.")
+        raise FileNotFoundError(f"Checkpoint file {checkpoint_path} doesn't exist.")
     checkpoint = torch.load(checkpoint_path)
     return checkpoint
+
+def load_log(checkpoint_file: pathlib.Path) -> list:
+    if not checkpoint_file.exists():
+        raise FileNotFoundError(f"Log file {checkpoint_file} doesn't exist.")
+    with open(checkpoint_file, 'r', encoding='utf-8') as file:
+        log = json.load(file)
+    return log
 
 class Trainer:
 
@@ -54,6 +60,7 @@ class Trainer:
         epoch: int, 
         timestamp: str,
         config,
+        log: list,
         save_path: pathlib.Path,
         is_best: bool = False
     ) -> pathlib.Path:
@@ -71,9 +78,16 @@ class Trainer:
 
         if is_best:
             checkpoint_file =  checkpoint_dir / f"checkpoint_best.pth"
+            log_file = checkpoint_dir / f"checkpoint_log_best.json"
         else:
             checkpoint_file =  checkpoint_dir / f"checkpoint_latest.pth"
+            log_file = checkpoint_dir / f"checkpoint_log_latest.json"
+
         torch.save(checkpoint_data, checkpoint_file)
+
+        with open(log_file, 'w', encoding='utf-8') as f:
+            json.dump(log, f, ensure_ascii=False, indent=4)
+
         # print(f"Saved checkpoint to {checkpoint_file}")
 
         return checkpoint_file
@@ -102,13 +116,13 @@ class Trainer:
     def train_step(self, x, y, is_labeled):
         num_modalities = len(x)
         device = self.config.device
-        matrics = {
+        metrics = {
             'd_train_loss': 0,
-            'd_train_aux_acc': 0,
             'recon_loss': 0,
             'kl_loss': 0,
             'd_loss': 0,
             'd_cluster_loss': 0,
+            'd_aux_acc': 0,
             'g_loss': 0,
             'modal_recon_loss': [],
             'modal_kl_loss': []
@@ -130,28 +144,6 @@ class Trainer:
         d_adv_means = []
         for i in range(num_modalities):
             d_adv_means.append(d_adv[i].mean())
-
-        # Classifier accuracy
-        d_aux_acc = 0
-        if self.config.training_mode == 'supervised':
-            for i in range(num_modalities):
-                d_aux_acc += accuracy(d_aux[i], y[i])
-        else:
-            for i in range(num_modalities):
-                labeled_mask = is_labeled[i]
-                if sum(labeled_mask) > 0:
-                    # Evaluate accuracy only on labeled samples
-                    d_aux_acc += accuracy(d_aux[i][labeled_mask], y[i])
-        d_aux_acc /= num_modalities
-
-        ### instead of doing avg among modalities
-        # d_aux_total = torch.concat([d_aux[i][is_labeled[i]] for i in range(num_modalities)], dim=0)
-        # y_total = torch.concat([y[i] for i in range(num_modalities)], dim=0)
-        # if y_total.size(0) == 0:
-        #     print(d_aux_acc, None)
-        # else:
-        #     print(d_aux_acc, accuracy(d_aux_total, y_total))
-        ####
 
         # Losses
 
@@ -194,25 +186,24 @@ class Trainer:
         for i in range(num_modalities):
             d_cluster_loss += self.cluster_loss(d_adv[i], d_aux[i], d_hidden[i])
 
-        d_train_loss = d_adv_loss + d_aux_loss + d_cluster_loss
+        d_train_loss = d_adv_loss + d_aux_loss
+        d_total_loss = d_train_loss + d_cluster_loss
 
-        # Backpropagation and logging
-
+        # Backpropagation
         self.optimizer.zero_grad()
-        d_train_loss.backward()
+        d_total_loss.backward()
         # Zero out VAE gradients before step
         for vae in self.model.variational_autoencoders:
             for param in vae.parameters():
                 param.grad = None
         self.optimizer.step()
 
-        if torch.isnan(d_train_loss) == True:
+        if torch.isnan(d_total_loss) == True:
             print("[!] Nan values found, aborting training")
             return
 
         # Logging
-        matrics['d_train_loss'] = d_train_loss.item()
-        matrics['d_train_aux_acc'] = d_aux_acc  ## do here or in the generator?
+        metrics['d_train_loss'] = d_train_loss.item()
 
         # ---------------
         # Train generators (VAEs)
@@ -231,6 +222,28 @@ class Trainer:
         d_adv_means = []
         for i in range(num_modalities):
             d_adv_means.append(d_adv[i].mean())
+
+        # Classifier accuracy
+        d_aux_acc = 0
+        if self.config.training_mode == 'supervised':
+            for i in range(num_modalities):
+                d_aux_acc += accuracy(d_aux[i], y[i])
+        else:
+            for i in range(num_modalities):
+                labeled_mask = is_labeled[i]
+                if sum(labeled_mask) > 0:
+                    # Evaluate accuracy only on labeled samples
+                    d_aux_acc += accuracy(d_aux[i][labeled_mask], y[i])
+        d_aux_acc /= num_modalities
+
+        ### instead of doing avg among modalities
+        # d_aux_total = torch.concat([d_aux[i][is_labeled[i]] for i in range(num_modalities)], dim=0)
+        # y_total = torch.concat([y[i] for i in range(num_modalities)], dim=0)
+        # if y_total.size(0) == 0:
+        #     print(d_aux_acc, None)
+        # else:
+        #     print(d_aux_acc, accuracy(d_aux_total, y_total))
+        ####
 
         # Losses
 
@@ -268,8 +281,7 @@ class Trainer:
 
         g_loss = recon_loss + (self.config.beta * kl_loss) + d_loss + d_cluster_loss
 
-        # Backpropagation and logging
-
+        # Backpropagation
         self.optimizer.zero_grad()
         g_loss.backward()
         # Zero out discriminator gradients before step
@@ -278,15 +290,16 @@ class Trainer:
         self.optimizer.step()
 
         # Logging
-        matrics['recon_loss'] = recon_loss.item()
-        matrics['kl_loss'] = kl_loss.item()
-        matrics['d_loss'] = d_loss.item()
-        matrics['d_cluster_loss'] = d_cluster_loss.item()
-        matrics['g_loss'] = g_loss.item()
-        matrics['modal_recon_loss'].extend([loss.item() for loss in recon_losses_modal])
-        matrics['modal_kl_loss'].extend([loss.item() for loss in kl_loss_modal])
+        metrics['recon_loss'] = recon_loss.item()
+        metrics['kl_loss'] = kl_loss.item()
+        metrics['d_loss'] = d_loss.item()
+        metrics['d_cluster_loss'] = d_cluster_loss.item()
+        metrics['d_aux_acc'] = d_aux_acc
+        metrics['g_loss'] = g_loss.item()
+        metrics['modal_recon_loss'].extend([loss.item() for loss in recon_losses_modal])
+        metrics['modal_kl_loss'].extend([loss.item() for loss in kl_loss_modal])
 
-        return matrics
+        return metrics
 
 import argparse
 def read_args():
@@ -312,6 +325,8 @@ def train(
 
     if args.checkpoint:
         checkpoint_data = load_checkpoint(args.checkpoint)
+        log = load_log(args.checkpoint.parent)
+
         timestamp = checkpoint_data['timestamp']
         init_epoch = checkpoint_data['epoch']+1
         config = OmegaConf.create(checkpoint_data['config'])
@@ -367,11 +382,11 @@ def train(
         print(
             f"epoch: {epoch+1}/{init_epoch + config.num_epochs}, "
             f"d_train_loss: {epoch_metrics['d_train_loss']:.4f}, "
-            f"d_train_aux_acc: {epoch_metrics['d_train_aux_acc']:.4f},  "
             f"recon_loss: {epoch_metrics['recon_loss']:.4f}, "
             f"kl_loss: {epoch_metrics['kl_loss']:.4f}, "
             f"d_loss: {epoch_metrics['d_loss']:.4f}, "
             f"d_cluster_loss: {epoch_metrics['d_cluster_loss']:.4f}, "
+            f"d_aux_acc: {epoch_metrics['d_aux_acc']:.4f},  "
             f"g_loss: {epoch_metrics['g_loss']:.4f}"
         )
 
@@ -379,19 +394,22 @@ def train(
         if is_best:
             best_loss = epoch_metrics['g_loss']
             trainer.save_checkpoint(
-                epoch=epoch,
-                timestamp=timestamp,
-                config=config,
-                save_path=save_path,
-                is_best=True
+                epoch = epoch,
+                timestamp = timestamp,
+                config = config,
+                log = log,
+                save_path = save_path,
+                is_best = True
             )
 
     print(f"Trained {epoch-init_epoch+1} epochs in {adjust_time(time.time() - start_time)}")
     print("==> Training finished!")
 
     trainer.save_checkpoint(
-        epoch=epoch,
-        timestamp=timestamp,
-        config=config,
-        save_path=save_path
+        epoch = epoch,
+        timestamp = timestamp,
+        config = config,
+        log = log,
+        save_path = save_path,
+        is_best = False
     )
