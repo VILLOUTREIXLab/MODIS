@@ -3,16 +3,57 @@ import time
 import pathlib
 
 import numpy as np
+from omegaconf import OmegaConf
+
 import torch
 from torch.autograd import grad as torch_grad
-from omegaconf import OmegaConf
 
 from modis.utils.config import load_config
 from modis.utils.data import get_dataloaders, summarize_dataset
-from modis.utils.utils import adjust_time, accuracy
+from modis.utils.utils import adjust_time, accuracy, calc_classification_metrics
 from modis.model import MODIS
 from modis.losses import ClusteringLoss
 
+
+def evaluate_model(model, dataloaders, device='cuda') -> tuple:  #, config):
+    """Validate the model on labeled samples"""
+
+    mse_loss = torch.nn.MSELoss()
+
+    model.eval()
+    pred_y = []
+    true_y = []
+    recon_loss = []
+    with torch.no_grad():
+        for idx, dl in enumerate(dataloaders):
+            for data in dl:
+                x, y = data[0].to(device), data[1].to(device)
+
+                label_mask = torch.tensor([True if label != -1 else False for label in y])
+                if sum(label_mask) > 0:
+                    x = x[label_mask]
+                    y = y[label_mask]
+
+                if x.size(0) == 0:
+                    print(f"[!] No labeled samples found in modality {idx}, skipping")
+                    continue
+
+                pred_y.append(model.predict(x, input_modality=idx))
+                true_y.append(y.view(-1))
+
+                # Reconstruction
+                latents = model.get_latents(x, input_modality=idx)
+                reconstruction = model.variational_autoencoders[idx].decode(latents)
+                recon_loss.append(mse_loss(reconstruction, x).cpu())
+
+    true_y = torch.cat(true_y, dim=0).tolist()
+    pred_y = torch.cat(pred_y, dim=0).tolist()
+    metrics = calc_classification_metrics(true_labels=true_y, pred_labels=pred_y)
+    
+    recon_loss = torch.stack(recon_loss).mean().item()
+    metrics['mse'] = recon_loss
+
+    return metrics
 
 def load_checkpoint(checkpoint_path: pathlib.Path) -> dict:
     if not checkpoint_path.exists():
@@ -309,8 +350,9 @@ def read_args():
     return args
 
 def train(
-    train_datasets: list[torch.utils.data.DataLoader],
     config_file: str,
+    train_datasets: list[torch.utils.data.DataLoader],
+    val_datasets: list[torch.utils.data.DataLoader] | None = None,
     data_summary: bool = True
 ) -> pathlib.Path:
     config = load_config(config_file)
@@ -334,10 +376,17 @@ def train(
     # Instantiate dataloaders
     train_dataloaders = get_dataloaders(train_datasets, batch_size=config.batch_size, drop_last=True, shuffle=True)
 
+    if val_datasets is not None:
+        val_dataloaders = get_dataloaders(val_datasets, batch_size=config.batch_size, drop_last=True, shuffle=True)
+
     if data_summary:
         print("==> Summary of train datasets")
         modality_names = [m.name for m in config.modalities]
         summarize_dataset(train_dataloaders, modality_names=modality_names)
+
+        if val_datasets is not None:
+            print("==> Summary of validation datasets")
+            summarize_dataset(val_dataloaders, modality_names=modality_names)
 
     trainer = Trainer(config)
 
@@ -348,6 +397,7 @@ def train(
         print(f"==> Starting training from scratch on {device} device")
 
     best_loss = float('inf')
+    val_acc = 0
     start_time = time.time()
     for epoch in range(init_epoch, init_epoch+config.num_epochs):
         metrics = []
@@ -377,6 +427,15 @@ def train(
             for key in metrics[0]
         }
         epoch_metrics['epoch_idx'] = epoch
+
+        #
+        val_acc_str = ''
+        if val_datasets is not None:
+            val_metrics = evaluate_model(trainer.model, train_dataloaders, device)
+            epoch_metrics['val_acc'] = val_metrics['acc']
+            val_acc_str = f"val_acc: {val_metrics['acc']:.3f}"
+
+        #
         log.append(epoch_metrics)
 
         print(
@@ -386,13 +445,20 @@ def train(
             f"kl_loss: {epoch_metrics['kl_loss']:.4f}, "
             f"d_loss: {epoch_metrics['d_loss']:.4f}, "
             f"d_cluster_loss: {epoch_metrics['d_cluster_loss']:.4f}, "
-            f"d_aux_acc: {epoch_metrics['d_aux_acc']:.4f},  "
+            f"d_aux_acc: {epoch_metrics['d_aux_acc']:.4f}, "
             f"g_loss: {epoch_metrics['g_loss']:.4f}"
+            f" {val_acc_str}"
         )
 
-        is_best = epoch_metrics['g_loss'] < best_loss
+        if val_datasets is not None:
+            is_best = epoch_metrics['g_loss'] < best_loss and epoch_metrics['val_acc'] >= val_acc
+        else:
+            is_best = epoch_metrics['g_loss'] < best_loss
+        
         if is_best:
             best_loss = epoch_metrics['g_loss']
+            if val_datasets is not None:
+                val_acc = epoch_metrics['val_acc']
             trainer.save_checkpoint(
                 epoch = epoch,
                 timestamp = timestamp,
@@ -404,6 +470,7 @@ def train(
 
     print(f"Trained {epoch-init_epoch+1} epochs in {adjust_time(time.time() - start_time)}")
     print("==> Training finished!")
+    print()
 
     checkpoint_file = trainer.save_checkpoint(
         epoch = epoch,
@@ -413,5 +480,10 @@ def train(
         save_path = save_path,
         is_best = False
     )
+
+    print("==> Evaluation metrics")
+    metrics = evaluate_model(trainer.model, train_dataloaders, device)
+    for metric_name, metric_value in metrics.items():
+        print(f"{metric_name}: {metric_value:.4f}")
 
     return checkpoint_file.parent

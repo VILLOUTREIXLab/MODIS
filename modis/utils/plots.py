@@ -10,11 +10,13 @@ import plotly.graph_objects as go
 import plotly.io as pio
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
 from modis import load_log
 from modis.model import MODIS
 from modis.utils.config import load_config
 from modis.utils.data import get_dataloaders, get_samples_from_dataloader
+from modis.utils.utils import calc_classification_metrics
 
 
 def plot_training_log(
@@ -405,37 +407,6 @@ def plot_3d_projection(
     else:
         fig.show()
 
-import numpy as np
-from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix, jaccard_score, f1_score, normalized_mutual_info_score, accuracy_score, balanced_accuracy_score
-from sklearn.metrics.cluster import adjusted_rand_score
-
-def acc_metrics(true_labels, pred_labels): # : np.ndarray?
-    cm = confusion_matrix(true_labels, pred_labels)
-    acc = np.trace(cm) / np.sum(cm)
-
-    balanced_acc = balanced_accuracy_score(true_labels, pred_labels)  # average of recall obtained on each class
-    nmi = normalized_mutual_info_score(true_labels, pred_labels)
-    ji = jaccard_score(true_labels, pred_labels, average='macro')    
-    ari = adjusted_rand_score(true_labels, pred_labels)
-    f1 = f1_score(true_labels, pred_labels, average='weighted')
-
-    # Inverse frequency weighting accuracy
-    class_weights = dict()
-    for class_label in np.unique(true_labels):
-        class_weights[class_label] = 1 / np.sum(true_labels == class_label)
-    sample_weights = np.array([class_weights[y] for y in true_labels])
-    weighted_accuracy = accuracy_score(true_labels, pred_labels, sample_weight=sample_weights)
-
-    return {
-        'acc': acc.item(),
-        'inv-freq-w-acc': weighted_accuracy,
-        'balanced-acc': balanced_acc,
-        'nmi': nmi if type(nmi) == float else nmi.item(),
-        'ji': ji if type(ji) == float else ji.item(),
-        'ari': ari if type(ari) == float else ari.item(),
-        'f1': f1 if type(f1) == float else f1.item()
-    }
-
 def plot_confusion_matrix(
     true_labels,
     pred_labels,
@@ -460,11 +431,11 @@ def plot_confusion_matrix(
     if save_plot and not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint path {checkpoint_path} doesn't exist.")
 
-    metrics = acc_metrics(true_labels, pred_labels)
+    metrics = calc_classification_metrics(true_labels, pred_labels)
     matrics_text = f"""
     ACC: {metrics['acc']:.3f}
     IFW-AAC: {metrics['inv-freq-w-acc']:.3f}
-    B-AAC: {metrics['balanced-acc']:.3f}
+    B-AAC: {metrics['bacc']:.3f}
     JI: {metrics['ji']:.3f}
     NMI: {metrics['nmi']:.3f}
     F1: {metrics['f1']:.3f}
@@ -562,6 +533,12 @@ def checkpoint_report_plots(
     num_modalities = len(config.modalities)
     modality_names = [m.name for m in config.modalities]
 
+    if not checkpoint_path.exists():
+        raise NotADirectoryError("Checkpoint path doesn't exist")
+
+    if not checkpoint_file.exists():
+        raise FileNotFoundError("There is not a best checkpoint file on this path.")
+
     plot_training_log(
         training_mode = config.training_mode,
         modality_names = modality_names,
@@ -571,7 +548,7 @@ def checkpoint_report_plots(
     )
 
     model = MODIS(config)
-    model.load_from_checkpoint(checkpoint_file)
+    model.load_from_checkpoint(checkpoint_file, verbose=False)
 
     dataloaders = get_dataloaders(datasets, batch_size=config.batch_size, drop_last=False, shuffle=True)
 
