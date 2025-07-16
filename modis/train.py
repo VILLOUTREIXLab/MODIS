@@ -7,6 +7,7 @@ from omegaconf import OmegaConf
 
 import torch
 from torch.autograd import grad as torch_grad
+from torch.utils.tensorboard import SummaryWriter
 
 from modis.utils.config import load_config
 from modis.utils.data import get_dataloaders, summarize_dataset
@@ -362,6 +363,7 @@ def train(
     # Variables
     log = []
     save_path = pathlib.Path("./saved")
+    log_path = pathlib.Path("./saved/log")
     device = config.device
     timestamp = time.strftime('%Y%m%d_%H%M%S')
     init_epoch = 0
@@ -390,6 +392,8 @@ def train(
             summarize_dataset(val_dataloaders, modality_names=modality_names)
 
     trainer = Trainer(config)
+
+    writer = SummaryWriter(log_dir=f"{log_path}/{timestamp}")
 
     if init_epoch > 0:
         trainer.load_model_and_optimizer_states(checkpoint_data)
@@ -451,6 +455,11 @@ def train(
             f"g_loss: {epoch_metrics['g_loss']:.4f}"
             f" {val_acc_str}"
         )
+        writer.add_scalar('d_loss', epoch_metrics['d_loss'], epoch+1)
+        writer.add_scalar('d_aux_acc', epoch_metrics['d_aux_acc'], epoch+1)
+        writer.add_scalar('g_loss', epoch_metrics['g_loss'], epoch+1)
+        if val_datasets is not None:
+            writer.add_scalar('val_acc', epoch_metrics['val_acc'], epoch+1)
 
         # Save best checkpoint
         if val_datasets is not None:
@@ -470,6 +479,8 @@ def train(
                 save_path = save_path,
                 is_best = True
             )
+
+    writer.close()
 
     print(f"Trained {epoch-init_epoch+1} epochs in {adjust_time(time.time() - start_time)}")
     print("==> Training finished!")

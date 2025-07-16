@@ -8,3 +8,5 @@ matplotlib
 plotly
 kaleido
 seaborn
+tensorboard
+standard-imghdr

@@ -50,6 +50,8 @@ def plot_training_log(
     g_loss = [item['g_loss'] for item in log]
     d_cluster_loss = [item['d_cluster_loss'] for item in log]
     d_aux_acc = [item['d_aux_acc'] for item in log]
+    if 'val_acc' in log[0]:
+        val_acc = [item['val_acc'] for item in log]
     
     fig = plt.figure(figsize=figsize)
     fig.suptitle(f'Training mode: {training_mode}', y=0.97)
@@ -96,6 +98,8 @@ def plot_training_log(
 
     plt.subplot(2, 3, 6)
     plt.plot(x, d_aux_acc, label='d_aux_acc')
+    if 'val_acc' in log[0]:
+        plt.plot(x, val_acc, label='val_acc')
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.legend(prop={'size': 11})
