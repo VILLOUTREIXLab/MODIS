@@ -17,10 +17,10 @@ from modis.model import MODIS
 from modis.losses import ClusteringLoss
 
 
-def load_checkpoint(checkpoint_path: pathlib.Path) -> dict:
-    if not checkpoint_path.exists():
-        raise FileNotFoundError(f"Checkpoint file {checkpoint_path} doesn't exist.")
-    checkpoint = torch.load(checkpoint_path)
+def load_checkpoint(checkpoint_file: pathlib.Path) -> dict:
+    if not checkpoint_file.exists():
+        raise FileNotFoundError(f"Checkpoint file {checkpoint_file} doesn't exist.")
+    checkpoint = torch.load(checkpoint_file)
     return checkpoint
 
 def load_log(checkpoint_file: pathlib.Path) -> list:
@@ -133,6 +133,10 @@ class Trainer:
             'modal_kl_loss': []
         }
 
+        targets = []  # Modality labels
+        for i in range(num_modalities):
+            targets.append(torch.full((x[i].size(0),), i, dtype=torch.long).to(device).detach())
+
         # -------------------
         # Train discriminator
         # -------------------
@@ -152,29 +156,33 @@ class Trainer:
 
         # Losses
 
-        # Relativistic GAN Loss (RpGAN)
         d_adv_loss = torch.tensor(0., device=device)
         for i in range(num_modalities):
-            fake_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != i]
-            fake_means_sum = torch.sum(torch.stack(fake_means), dim=0)  ## average instead?
-            real_loss = torch.nn.functional.relu(1 - (d_adv[i] - fake_means_sum)).mean()
+            d_adv_loss += self.ce_loss(d_adv[i], targets[i])
 
-            fake_loss = torch.tensor(0., device=device)
-            for j in range(num_modalities):
-                if i == j: continue
-                # real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
-                # real_means_sum = torch.sum(torch.stack(real_means), dim=0)
-                # fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - real_means_sum)).mean()
-
-                # Other approach
-                fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - d_adv_means[i])).mean()
-
-            d_adv_loss += real_loss - fake_loss
-
-        # Gradient penalties of all data (R1 and R2 regularization)
+        # # Relativistic GAN Loss (RpGAN)
+        # d_adv_loss = torch.tensor(0., device=device)
         # for i in range(num_modalities):
-        penalty = self.regularization(x) * self.config.lambda_r
-        d_adv_loss += penalty
+        #     fake_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != i]
+        #     fake_means_sum = torch.sum(torch.stack(fake_means), dim=0)  ## average instead?
+        #     real_loss = torch.nn.functional.relu(1 - (d_adv[i] - fake_means_sum)).mean()
+
+        #     fake_loss = torch.tensor(0., device=device)
+        #     for j in range(num_modalities):
+        #         if i == j: continue
+        #         real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
+        #         real_means_sum = torch.sum(torch.stack(real_means), dim=0)
+        #         fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - real_means_sum)).mean()
+
+        #         # Other approach
+        #         # fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - d_adv_means[i])).mean()
+
+        #     d_adv_loss += real_loss - fake_loss
+
+        # # Gradient penalties of all data (R1 and R2 regularization)
+        # # for i in range(num_modalities):
+        # penalty = self.regularization(x) * self.config.lambda_r
+        # d_adv_loss += penalty
 
         # Auxiliary loss
         d_aux_loss = torch.tensor(0., device=device)
@@ -262,10 +270,17 @@ class Trainer:
 
         # Discriminator
         d_adv_loss = torch.tensor(0., device=device)
-        for j in range(num_modalities):
-            real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
-            real_means_sum = torch.sum(torch.stack(real_means), dim=0)
-            d_adv_loss += torch.nn.functional.relu(1 - (d_adv[j] - real_means_sum)).mean()
+        for i in range(num_modalities):
+            for j in range(num_modalities):
+                if i == j: continue
+                d_adv_loss += self.ce_loss(d_adv[i], targets[j])
+
+        # # Discriminator
+        # d_adv_loss = torch.tensor(0., device=device)
+        # for j in range(num_modalities):
+        #     real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
+        #     real_means_sum = torch.sum(torch.stack(real_means), dim=0)
+        #     d_adv_loss += torch.nn.functional.relu(1 - (d_adv[j] - real_means_sum)).mean()
 
         d_aux_loss = torch.tensor(0., device=device)
         for i in range(num_modalities):
@@ -454,8 +469,8 @@ def train(
     # Save latest checkpoint
 
     if not config.save_checkpoint:
-        checkpoint_path = None
-        return checkpoint_path
+        checkpoint_dir = None
+        return checkpoint_dir
     
     checkpoint_file = trainer.save_checkpoint(
         epoch = epoch,
@@ -465,7 +480,7 @@ def train(
         save_path = save_path,
         is_best = False
     )
-    checkpoint_path = checkpoint_file.parent
+    checkpoint_dir = checkpoint_file.parent
 
     # Evaluate model and save metrics
 
@@ -479,9 +494,9 @@ def train(
     
         for checkpoint_version in ['latest', 'best']:
             if checkpoint_version == 'best':
-                if checkpoint_path is None:
+                if checkpoint_dir is None:
                     break
-                checkpoint_file_best = checkpoint_path / f"checkpoint_best.pth"
+                checkpoint_file_best = checkpoint_dir / f"checkpoint_best.pth"
                 trainer.model.load_from_checkpoint(checkpoint_file_best, verbose=False)
 
             print(f"==> Evaluation metrics on train dataset for {checkpoint_version} checkpoint")
@@ -498,7 +513,7 @@ def train(
                     print(f"{metric_name}: {metric_value:.4f}")
 
         try:
-            with open(checkpoint_path / f"checkpoints_evaluation_metrics.json", 'w', encoding='utf-8') as json_file:
+            with open(checkpoint_dir / f"checkpoints_evaluation_metrics.json", 'w', encoding='utf-8') as json_file:
                 json.dump(metrics_data, json_file, indent=4, ensure_ascii=False)
         except IOError as e:
             print(f"Error saving evaluation metrics file: {e}")
@@ -506,7 +521,7 @@ def train(
     # Save report plots
     if generate_plots:
         checkpoint_report_plots(
-            checkpoint_path = checkpoint_path,
+            checkpoint_dir = checkpoint_dir,
             config_file = config_file,
             datasets = train_datasets,
             is_train = True,
@@ -515,7 +530,7 @@ def train(
         )
 
         checkpoint_report_plots(
-            checkpoint_path = checkpoint_path,
+            checkpoint_dir = checkpoint_dir,
             config_file = config_file,
             datasets = train_datasets,
             is_train = True,
@@ -525,7 +540,7 @@ def train(
 
         if val_datasets is not None:
             checkpoint_report_plots(
-                checkpoint_path = checkpoint_path,
+                checkpoint_dir = checkpoint_dir,
                 config_file = config_file,
                 datasets = val_datasets,
                 is_train = False,
@@ -534,7 +549,7 @@ def train(
             )
 
             checkpoint_report_plots(
-                checkpoint_path = checkpoint_path,
+                checkpoint_dir = checkpoint_dir,
                 config_file = config_file,
                 datasets = val_datasets,
                 is_train = False,
@@ -542,4 +557,4 @@ def train(
                 num_samples = None
             )
 
-    return checkpoint_path
+    return checkpoint_dir

@@ -40,14 +40,14 @@ if config.training_mode == 'semisupervised':
     # train_datasets = [SemiSupervisedDataset(dataset, class_samples=[1, 1, 1, 1, 1]) for dataset in train_datasets]
 
 # Train model
-# checkpoint_path = modis.train(config_file, train_datasets, summarize_datasets=True, report_plots=True)
-checkpoint_path = modis.train(
+# checkpoint_dir = modis.train(config_file, train_datasets, summarize_datasets=True, report_plots=True)
+checkpoint_dir = modis.train(
     config_file,
     train_datasets,
     val_datasets,
     show_dataset_summary=False,
-    run_evaluation=False,
-    generate_plots=False
+    run_evaluation=True,
+    generate_plots=True
 )
 
 
@@ -68,7 +68,7 @@ test_datasets = get_datasets(
 
 config = load_config(config_file)
 model = MODIS(config)
-model.load_from_checkpoint(checkpoint_path / "checkpoint_best.pth")
+model.load_from_checkpoint(checkpoint_dir / "checkpoint_best.pth")
 
 test_dataloaders = get_dataloaders(test_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)
 metrics  = evaluate_model(model, test_dataloaders)
