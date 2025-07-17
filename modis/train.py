@@ -317,8 +317,9 @@ def train(
     config_file: str,
     train_datasets: list[torch.utils.data.DataLoader],
     val_datasets: list[torch.utils.data.DataLoader] | None = None,
-    summarize_datasets: bool = True,
-    report_plots: bool = True
+    show_dataset_summary: bool = True,
+    run_evaluation: bool = True,
+    generate_plots: bool = True
 ) -> pathlib.Path:
     config = load_config(config_file)
     args = read_args()
@@ -345,7 +346,7 @@ def train(
     if val_datasets is not None:
         val_dataloaders = get_dataloaders(val_datasets, batch_size=config.batch_size, drop_last=True, shuffle=True)
 
-    if summarize_datasets:
+    if show_dataset_summary:
         print("==> Summary of train datasets")
         modality_names = [m.name for m in config.modalities]
         summarize_dataset(train_dataloaders, modality_names=modality_names)
@@ -360,9 +361,9 @@ def train(
 
     if init_epoch > 0:
         trainer.load_model_and_optimizer_states(checkpoint_data)
-        print(f"=> Resuming training on {device} device")
+        print(f"=> Resuming {config.training_mode} training on {device} device")
     else:
-        print(f"==> Starting training from scratch on {device} device")
+        print(f"==> Starting {config.training_mode} training from scratch on {device} device")
 
     best_loss = float('inf')
     val_acc = 0
@@ -468,41 +469,42 @@ def train(
 
     # Evaluate model and save metrics
 
-    metrics_data = {'latest': dict(), 'best': dict()}
+    if run_evaluation:
+        metrics_data = {'latest': dict(), 'best': dict()}
 
-    # Include last batch
-    train_dataloaders = get_dataloaders(train_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)
-    if val_datasets is not None:
-        val_dataloaders = get_dataloaders(val_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)
- 
-    for checkpoint_version in ['latest', 'best']:
-        if checkpoint_version == 'best':
-            if checkpoint_path is None:
-                break
-            checkpoint_file_best = checkpoint_path / f"checkpoint_best.pth"
-            trainer.model.load_from_checkpoint(checkpoint_file_best, verbose=False)
-
-        print(f"==> Evaluation metrics on train dataset for {checkpoint_version} checkpoint")
-        metrics = evaluate_model(trainer.model, train_dataloaders)
-        metrics_data[checkpoint_version]['train'] = metrics
-        for metric_name, metric_value in metrics.items():
-            print(f"{metric_name}: {metric_value:.4f}")
-
+        # Include last batch
+        train_dataloaders = get_dataloaders(train_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)
         if val_datasets is not None:
-            print(f"==> Evaluation metrics on validation dataset for {checkpoint_version} checkpoint")
-            metrics = evaluate_model(trainer.model, val_dataloaders)
-            metrics_data[checkpoint_version]['validation'] = metrics
+            val_dataloaders = get_dataloaders(val_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)
+    
+        for checkpoint_version in ['latest', 'best']:
+            if checkpoint_version == 'best':
+                if checkpoint_path is None:
+                    break
+                checkpoint_file_best = checkpoint_path / f"checkpoint_best.pth"
+                trainer.model.load_from_checkpoint(checkpoint_file_best, verbose=False)
+
+            print(f"==> Evaluation metrics on train dataset for {checkpoint_version} checkpoint")
+            metrics = evaluate_model(trainer.model, train_dataloaders)
+            metrics_data[checkpoint_version]['train'] = metrics
             for metric_name, metric_value in metrics.items():
                 print(f"{metric_name}: {metric_value:.4f}")
 
-    try:
-        with open(checkpoint_path / f"checkpoints_evaluation_metrics.json", 'w', encoding='utf-8') as json_file:
-            json.dump(metrics_data, json_file, indent=4, ensure_ascii=False)
-    except IOError as e:
-        print(f"Error saving evaluation metrics file: {e}")
+            if val_datasets is not None:
+                print(f"==> Evaluation metrics on validation dataset for {checkpoint_version} checkpoint")
+                metrics = evaluate_model(trainer.model, val_dataloaders)
+                metrics_data[checkpoint_version]['validation'] = metrics
+                for metric_name, metric_value in metrics.items():
+                    print(f"{metric_name}: {metric_value:.4f}")
+
+        try:
+            with open(checkpoint_path / f"checkpoints_evaluation_metrics.json", 'w', encoding='utf-8') as json_file:
+                json.dump(metrics_data, json_file, indent=4, ensure_ascii=False)
+        except IOError as e:
+            print(f"Error saving evaluation metrics file: {e}")
 
     # Save report plots
-    if report_plots:
+    if generate_plots:
         checkpoint_report_plots(
             checkpoint_path = checkpoint_path,
             config_file = config_file,

@@ -28,15 +28,51 @@ train_datasets, val_datasets = list(zip(*[random_split(
     generator=torch.Generator().manual_seed(1234)
 ) for train_dataset in train_datasets]))
 
+# Generate partially labeled dataset
 from modis.utils.config import load_config
 config = load_config(config_file)
 if config.training_mode == 'semisupervised':
-    # Fully unsupervised dataset
+    # Unsupervised dataset
     # train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0, random_seed=1234) for dataset in train_datasets]
 
-    # Fully semisupervised dataset
-    train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0.1, random_seed=1234) for dataset in train_datasets]
+    # Semisupervised dataset
+    train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0.5, random_seed=1234) for dataset in train_datasets]
+    # train_datasets = [SemiSupervisedDataset(dataset, class_samples=[1, 1, 1, 1, 1]) for dataset in train_datasets]
 
 # Train model
 # checkpoint_path = modis.train(config_file, train_datasets, summarize_datasets=True, report_plots=True)
-checkpoint_path = modis.train(config_file, train_datasets, val_datasets, summarize_datasets=True, report_plots=True)
+checkpoint_path = modis.train(
+    config_file,
+    train_datasets,
+    val_datasets,
+    show_dataset_summary=False,
+    run_evaluation=False,
+    generate_plots=False
+)
+
+
+# Evaluation on test dataset
+
+from modis.utils.data import get_dataloaders
+from modis.utils.config import load_config
+from modis.utils.utils import evaluate_model
+from modis.model import MODIS
+
+test_datasets = get_datasets(
+    dataset_name = 'intersim_2_delta',
+    pairing = 'unpaired',
+    split = 'test',
+    data_path = './data',
+    include_sample_ids = False
+)
+
+config = load_config(config_file)
+model = MODIS(config)
+model.load_from_checkpoint(checkpoint_path / "checkpoint_best.pth")
+
+test_dataloaders = get_dataloaders(test_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)
+metrics  = evaluate_model(model, test_dataloaders)
+
+print(f"\n==> Evaluation metrics on test dataset")
+for k,v in metrics.items():
+    print(f"{k}: {v:.4f}")

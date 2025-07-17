@@ -197,14 +197,14 @@ class MODIS(nn.Module):
             latents = self.get_latents(x, input_modality=input_modality)
         return self.discriminator.predict(latents)
     
-    def translate(self, x: torch.Tensor, input_modality: int, target_modality: int) -> torch.Tensor:
+    def translate(self, x: torch.Tensor, input_modality: int, output_modality: int) -> torch.Tensor:
         """
         Do cross-modal translation
 
         Args:
             x (torch.Tensor): Samples to translate, shape (samples, features)
             input_modality (int): Modality VAE index in the model to which the samples belong
-            target_modality (int): Modality VAE index in the model to which the samples will be translated
+            output_modality (int): Modality VAE index in the model to which the samples will be translated
 
         Return:
             (torch.Tensor): Approximation of the samples in the target modality
@@ -212,7 +212,7 @@ class MODIS(nn.Module):
         self.eval()
         with torch.no_grad():
             latents = self.get_latents(x, input_modality=input_modality)
-            recon_x = self.variational_autoencoders[target_modality].decode(latents)
+            recon_x = self.variational_autoencoders[output_modality].decode(latents)
         return recon_x.cpu().numpy()
 
     def load_from_checkpoint(self, checkpoint_file: str, verbose: bool = True) -> None:
