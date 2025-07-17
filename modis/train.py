@@ -11,56 +11,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 from modis.utils.config import load_config
 from modis.utils.data import get_dataloaders, summarize_dataset
-from modis.utils.utils import adjust_time, accuracy, calc_classification_metrics
+from modis.utils.utils import adjust_time, accuracy, evaluate_model
 from modis.utils.plots import checkpoint_report_plots
 from modis.model import MODIS
 from modis.losses import ClusteringLoss
 
-
-def evaluate_model(model, dataloaders) -> dict:
-    """Validate the model on labeled samples"""
-    device = model.device
-    mse_loss = torch.nn.MSELoss()
-
-    model.eval()
-    pred_y = []
-    true_y = []
-    recon_loss = []
-    with torch.no_grad():
-        for idx, dl in enumerate(dataloaders):
-            for data in dl:
-                x, y = data[0].to(device), data[1].to(device)
-
-                label_mask = torch.tensor([True if label != -1 else False for label in y])
-                
-                if sum(label_mask) == 0:
-                    continue
-
-                x = x[label_mask]
-                y = y[label_mask]
-
-                if x.size(0) == 0:
-                    print(f"[!] No labeled samples found in modality {idx}, skipping")
-                    continue
-
-                pred_y.append(model.predict(x, input_modality=idx))
-                true_y.append(y.view(-1))
-
-                # Reconstruction
-                latents = model.get_latents(x, input_modality=idx)
-                reconstruction = model.variational_autoencoders[idx].decode(latents)
-                recon_loss.append(mse_loss(reconstruction, x).cpu())
-
-    true_y = torch.cat(true_y, dim=0).tolist()
-    pred_y = torch.cat(pred_y, dim=0).tolist()
-
-    # print("output labels", len(true_y), len(pred_y))
-    metrics = calc_classification_metrics(true_labels=true_y, pred_labels=pred_y)
-    
-    recon_loss = torch.stack(recon_loss).mean().item()
-    metrics['mse'] = recon_loss
-
-    return metrics
 
 def load_checkpoint(checkpoint_path: pathlib.Path) -> dict:
     if not checkpoint_path.exists():
@@ -512,58 +467,33 @@ def train(
     checkpoint_path = checkpoint_file.parent
 
     # Evaluate model and save metrics
+
     metrics_data = {'latest': dict(), 'best': dict()}
+
+    # Include last batch
+    train_dataloaders = get_dataloaders(train_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)
+    if val_datasets is not None:
+        val_dataloaders = get_dataloaders(val_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)
  
-    # for checkpoint_version in ['latest', 'best']:
-    #     if checkpoint_version == 'best':
-    #         if val_datasets is None or checkpoint_path is None:
-    #             continue
-    #         metrics_data[checkpoint_version] = dict()
-    #         checkpoint_data = load_checkpoint(checkpoint_path / f"checkpoint_best.pth")
-    #         trainer.load_model_and_optimizer_states(checkpoint_data)
+    for checkpoint_version in ['latest', 'best']:
+        if checkpoint_version == 'best':
+            if checkpoint_path is None:
+                break
+            checkpoint_file_best = checkpoint_path / f"checkpoint_best.pth"
+            trainer.model.load_from_checkpoint(checkpoint_file_best, verbose=False)
 
-    #     print(f"==> Evaluation metrics on train dataset for {checkpoint_version} checkpoint")
-    #     metrics = evaluate_model(trainer.model, train_dataloaders, device)
-    #     metrics_data[checkpoint_version]['train'] = metrics
-    #     for metric_name, metric_value in metrics.items():
-    #         print(f"{metric_name}: {metric_value:.4f}")
-
-    #     if val_datasets is not None:
-    #         print(f"==> Evaluation metrics on validation dataset for {checkpoint_version} checkpoint")
-    #         metrics = evaluate_model(trainer.model, val_dataloaders, device)
-    #         metrics_data[checkpoint_version]['validation'] = metrics
-    #         for metric_name, metric_value in metrics.items():
-    #             print(f"{metric_name}: {metric_value:.4f}")
-
-    print(f"==> Evaluation metrics on train dataset for latest checkpoint")
-    metrics = evaluate_model(trainer.model, train_dataloaders)
-    metrics_data['latest']['train'] = metrics
-    for metric_name, metric_value in metrics.items():
-        print(f"{metric_name}: {metric_value:.4f}")
-
-    if val_datasets is not None:
-        print(f"==> Evaluation metrics on validation dataset for latest checkpoint")
-        metrics = evaluate_model(trainer.model, val_dataloaders)
-        metrics_data['latest']['validation'] = metrics
+        print(f"==> Evaluation metrics on train dataset for {checkpoint_version} checkpoint")
+        metrics = evaluate_model(trainer.model, train_dataloaders)
+        metrics_data[checkpoint_version]['train'] = metrics
         for metric_name, metric_value in metrics.items():
             print(f"{metric_name}: {metric_value:.4f}")
 
-    # Load best model
-    checkpoint_file_best = checkpoint_path / f"checkpoint_best.pth"
-    trainer.model.load_from_checkpoint(checkpoint_file_best, verbose=False)
-
-    print(f"==> Evaluation metrics on train dataset for best checkpoint")
-    metrics = evaluate_model(trainer.model, train_dataloaders)
-    metrics_data['best']['train'] = metrics
-    for metric_name, metric_value in metrics.items():
-        print(f"{metric_name}: {metric_value:.4f}")
-
-    if val_datasets is not None:
-        print(f"==> Evaluation metrics on validation dataset for best checkpoint")
-        metrics = evaluate_model(trainer.model, val_dataloaders)
-        metrics_data['best']['validation'] = metrics
-        for metric_name, metric_value in metrics.items():
-            print(f"{metric_name}: {metric_value:.4f}")
+        if val_datasets is not None:
+            print(f"==> Evaluation metrics on validation dataset for {checkpoint_version} checkpoint")
+            metrics = evaluate_model(trainer.model, val_dataloaders)
+            metrics_data[checkpoint_version]['validation'] = metrics
+            for metric_name, metric_value in metrics.items():
+                print(f"{metric_name}: {metric_value:.4f}")
 
     try:
         with open(checkpoint_path / f"checkpoints_evaluation_metrics.json", 'w', encoding='utf-8') as json_file:

@@ -38,4 +38,5 @@ if config.training_mode == 'semisupervised':
     train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0.1, random_seed=1234) for dataset in train_datasets]
 
 # Train model
+# checkpoint_path = modis.train(config_file, train_datasets, summarize_datasets=True, report_plots=True)
 checkpoint_path = modis.train(config_file, train_datasets, val_datasets, summarize_datasets=True, report_plots=True)
