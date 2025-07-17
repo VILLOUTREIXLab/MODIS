@@ -594,6 +594,11 @@ def checkpoint_report_plots(
             x[i] = x[i][labeled_mask]
             y[i] = y[i][labeled_mask]
 
+    total_labeled_samples = sum([len(ds) for ds in y])
+    if total_labeled_samples == 0:
+        print("At least some labeled samples are needed for plotting the projections and confusion matrices")
+        return
+
     # Latents
     modal_latents = [model.get_latents(x[i], input_modality=i) for i in range(num_modalities)]
     latents = torch.concat(modal_latents, dim=0).cpu().numpy()

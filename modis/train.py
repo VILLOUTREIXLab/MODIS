@@ -17,8 +17,9 @@ from modis.model import MODIS
 from modis.losses import ClusteringLoss
 
 
-def evaluate_model(model, dataloaders, device='cuda') -> dict:
+def evaluate_model(model, dataloaders) -> dict:
     """Validate the model on labeled samples"""
+    device = model.device
     mse_loss = torch.nn.MSELoss()
 
     model.eval()
@@ -31,9 +32,12 @@ def evaluate_model(model, dataloaders, device='cuda') -> dict:
                 x, y = data[0].to(device), data[1].to(device)
 
                 label_mask = torch.tensor([True if label != -1 else False for label in y])
-                if sum(label_mask) > 0:
-                    x = x[label_mask]
-                    y = y[label_mask]
+                
+                if sum(label_mask) == 0:
+                    continue
+
+                x = x[label_mask]
+                y = y[label_mask]
 
                 if x.size(0) == 0:
                     print(f"[!] No labeled samples found in modality {idx}, skipping")
@@ -49,6 +53,8 @@ def evaluate_model(model, dataloaders, device='cuda') -> dict:
 
     true_y = torch.cat(true_y, dim=0).tolist()
     pred_y = torch.cat(pred_y, dim=0).tolist()
+
+    # print("output labels", len(true_y), len(pred_y))
     metrics = calc_classification_metrics(true_labels=true_y, pred_labels=pred_y)
     
     recon_loss = torch.stack(recon_loss).mean().item()
@@ -104,7 +110,8 @@ class Trainer:
         config,
         log: list,
         save_path: pathlib.Path,
-        is_best: bool = False
+        is_best: bool = False,
+        verbose: bool = True
     ) -> pathlib.Path:
 
         checkpoint_data = {
@@ -130,7 +137,8 @@ class Trainer:
         with open(log_file, 'w', encoding='utf-8') as f:
             json.dump(log, f, ensure_ascii=False, indent=4)
 
-        # print(f"Saved checkpoint to {checkpoint_file}")
+        if verbose:
+            print(f"Saved checkpoint to {checkpoint_file}")
 
         return checkpoint_file
     
@@ -437,7 +445,7 @@ def train(
         #
         val_acc_str = ''
         if val_datasets is not None:
-            val_metrics = evaluate_model(trainer.model, train_dataloaders, device)
+            val_metrics = evaluate_model(trainer.model, train_dataloaders)
             epoch_metrics['val_acc'] = val_metrics['acc']
             val_acc_str = f"val_acc: {val_metrics['acc']:.3f}"
 
@@ -451,8 +459,8 @@ def train(
             f"kl_loss: {epoch_metrics['kl_loss']:.4f}, "
             f"d_loss: {epoch_metrics['d_loss']:.4f}, "
             f"d_cluster_loss: {epoch_metrics['d_cluster_loss']:.4f}, "
-            f"d_aux_acc: {epoch_metrics['d_aux_acc']:.4f}, "
-            f"g_loss: {epoch_metrics['g_loss']:.4f}"
+            f"g_loss: {epoch_metrics['g_loss']:.4f}, "
+            f"d_aux_acc: {epoch_metrics['d_aux_acc']:.4f}"
             f" {val_acc_str}"
         )
         writer.add_scalar('d_loss', epoch_metrics['d_loss'], epoch+1)
@@ -477,7 +485,8 @@ def train(
                 config = config,
                 log = log,
                 save_path = save_path,
-                is_best = True
+                is_best = True,
+                verbose=False
             )
 
     writer.close()
@@ -503,35 +512,66 @@ def train(
     checkpoint_path = checkpoint_file.parent
 
     # Evaluate model and save metrics
-    metrics_data = {'latest': dict()}
+    metrics_data = {'latest': dict(), 'best': dict()}
  
-    for checkpoint_version in ['latest', 'best']:
-        if checkpoint_version == 'best':
-            if val_datasets is None or checkpoint_path is None:
-                continue
-            metrics_data[checkpoint_version] = dict()
-            checkpoint_data = load_checkpoint(checkpoint_path / f"checkpoint_best.pth")
-            trainer.load_model_and_optimizer_states(checkpoint_data)
+    # for checkpoint_version in ['latest', 'best']:
+    #     if checkpoint_version == 'best':
+    #         if val_datasets is None or checkpoint_path is None:
+    #             continue
+    #         metrics_data[checkpoint_version] = dict()
+    #         checkpoint_data = load_checkpoint(checkpoint_path / f"checkpoint_best.pth")
+    #         trainer.load_model_and_optimizer_states(checkpoint_data)
 
-        print(f"==> Evaluation metrics on train dataset for {checkpoint_version} checkpoint")
-        metrics = evaluate_model(trainer.model, train_dataloaders, device)
-        metrics_data[checkpoint_version]['train'] = metrics
+    #     print(f"==> Evaluation metrics on train dataset for {checkpoint_version} checkpoint")
+    #     metrics = evaluate_model(trainer.model, train_dataloaders, device)
+    #     metrics_data[checkpoint_version]['train'] = metrics
+    #     for metric_name, metric_value in metrics.items():
+    #         print(f"{metric_name}: {metric_value:.4f}")
+
+    #     if val_datasets is not None:
+    #         print(f"==> Evaluation metrics on validation dataset for {checkpoint_version} checkpoint")
+    #         metrics = evaluate_model(trainer.model, val_dataloaders, device)
+    #         metrics_data[checkpoint_version]['validation'] = metrics
+    #         for metric_name, metric_value in metrics.items():
+    #             print(f"{metric_name}: {metric_value:.4f}")
+
+    print(f"==> Evaluation metrics on train dataset for latest checkpoint")
+    metrics = evaluate_model(trainer.model, train_dataloaders)
+    metrics_data['latest']['train'] = metrics
+    for metric_name, metric_value in metrics.items():
+        print(f"{metric_name}: {metric_value:.4f}")
+
+    if val_datasets is not None:
+        print(f"==> Evaluation metrics on validation dataset for latest checkpoint")
+        metrics = evaluate_model(trainer.model, val_dataloaders)
+        metrics_data['latest']['validation'] = metrics
         for metric_name, metric_value in metrics.items():
             print(f"{metric_name}: {metric_value:.4f}")
 
-        if val_datasets is not None:
-            print(f"==> Evaluation metrics on validation dataset for {checkpoint_version} checkpoint")
-            metrics = evaluate_model(trainer.model, val_dataloaders, device)
-            metrics_data[checkpoint_version]['evaluation'] = metrics
-            for metric_name, metric_value in metrics.items():
-                print(f"{metric_name}: {metric_value:.4f}")
+    # Load best model
+    checkpoint_file_best = checkpoint_path / f"checkpoint_best.pth"
+    trainer.model.load_from_checkpoint(checkpoint_file_best, verbose=False)
+
+    print(f"==> Evaluation metrics on train dataset for best checkpoint")
+    metrics = evaluate_model(trainer.model, train_dataloaders)
+    metrics_data['best']['train'] = metrics
+    for metric_name, metric_value in metrics.items():
+        print(f"{metric_name}: {metric_value:.4f}")
+
+    if val_datasets is not None:
+        print(f"==> Evaluation metrics on validation dataset for best checkpoint")
+        metrics = evaluate_model(trainer.model, val_dataloaders)
+        metrics_data['best']['validation'] = metrics
+        for metric_name, metric_value in metrics.items():
+            print(f"{metric_name}: {metric_value:.4f}")
 
     try:
         with open(checkpoint_path / f"checkpoints_evaluation_metrics.json", 'w', encoding='utf-8') as json_file:
             json.dump(metrics_data, json_file, indent=4, ensure_ascii=False)
     except IOError as e:
-        print(f"Error saving file: {e}")
+        print(f"Error saving evaluation metrics file: {e}")
 
+    # Save report plots
     if report_plots:
         checkpoint_report_plots(
             checkpoint_path = checkpoint_path,
@@ -569,5 +609,5 @@ def train(
                 use_best = True,
                 num_samples = None
             )
-        
+
     return checkpoint_path
