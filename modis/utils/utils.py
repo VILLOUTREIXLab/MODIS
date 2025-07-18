@@ -97,11 +97,13 @@ def evaluate_model(model, dataloaders) -> dict:
                 reconstruction = model.variational_autoencoders[idx].decode(latents)
                 recon_loss.append(mse_loss(reconstruction, x).cpu())
 
+    if not true_y:
+        return dict()
+
     true_y = torch.cat(true_y, dim=0).tolist()
     pred_y = torch.cat(pred_y, dim=0).tolist()
-
     metrics = calc_classification_metrics(true_labels=true_y, pred_labels=pred_y)
-    
+
     recon_loss = torch.stack(recon_loss).mean().item()
     metrics['mse'] = recon_loss
 

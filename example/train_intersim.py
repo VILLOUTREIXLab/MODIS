@@ -38,7 +38,7 @@ if config.training_mode == 'semisupervised':
     # train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0, random_seed=random_seed) for dataset in train_datasets]
 
     # Semisupervised dataset
-    train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=1, random_seed=random_seed) for dataset in train_datasets]
+    train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0.00, random_seed=random_seed) for dataset in train_datasets]
     # train_datasets = [SemiSupervisedDataset(dataset, class_samples=[1, 1, 1, 1, 1], random_seed=random_seed) for dataset in train_datasets]
 
 # Train model
@@ -60,6 +60,8 @@ from modis.utils.config import load_config
 from modis.utils.utils import evaluate_model
 from modis.model import MODIS
 
+print(f"\n==> Evaluating model on test dataset")
+
 test_datasets = get_datasets(
     dataset_name = 'intersim_2_delta',
     pairing = 'unpaired',
@@ -75,6 +77,5 @@ model.load_from_checkpoint(checkpoint_dir / "checkpoint_best.pth")
 test_dataloaders = get_dataloaders(test_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)
 metrics  = evaluate_model(model, test_dataloaders)
 
-print(f"\n==> Evaluation metrics on test dataset")
 for k,v in metrics.items():
     print(f"{k}: {v:.4f}")

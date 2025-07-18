@@ -165,7 +165,8 @@ class Trainer:
         d_adv_loss = torch.tensor(0., device=device)
         for i in range(num_modalities):
             fake_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != i]
-            fake_means_sum = torch.sum(torch.stack(fake_means), dim=0)  ## average instead?
+            fake_means_sum = torch.sum(torch.stack(fake_means), dim=0)  # averaging instead of adding the means doesn't work
+            # fake_means_sum = torch.mean(torch.stack(fake_means), dim=0)  ## average instead?
             real_loss = torch.nn.functional.relu(1 - (d_adv[i] - fake_means_sum)).mean()
 
             fake_loss = torch.tensor(0., device=device)
@@ -415,8 +416,8 @@ def train(
         val_acc_str = ''
         if val_datasets is not None:
             val_metrics = evaluate_model(trainer.model, train_dataloaders)
-            epoch_metrics['val_acc'] = val_metrics['acc']
-            val_acc_str = f"val_acc: {val_metrics['acc']:.3f}"
+            epoch_metrics['val_acc'] = val_metrics.get('acc', 0.)
+            val_acc_str = f"val_acc: {epoch_metrics['val_acc']}"
 
         #
         log.append(epoch_metrics)
