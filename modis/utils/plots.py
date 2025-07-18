@@ -49,6 +49,7 @@ def plot_training_log(
     d_loss = [item['d_loss'] for item in log]
     g_loss = [item['g_loss'] for item in log]
     d_cluster_loss = [item['d_cluster_loss'] for item in log]
+    d_adv_acc = [item['d_adv_acc'] for item in log]
     d_aux_acc = [item['d_aux_acc'] for item in log]
     if 'val_acc' in log[0]:
         val_acc = [item['val_acc'] for item in log]
@@ -97,6 +98,7 @@ def plot_training_log(
     plt.grid()
 
     plt.subplot(2, 3, 6)
+    plt.plot(x, d_adv_acc, label='d_adv_acc')
     plt.plot(x, d_aux_acc, label='d_aux_acc')
     if 'val_acc' in log[0]:
         plt.plot(x, val_acc, label='val_acc')
@@ -615,7 +617,7 @@ def checkpoint_report_plots(
 
     # Names
     modality_names = [f"{config.modalities[i].name}" for i in range(num_modalities)]
-    class_names = [i for i in range(config.num_classes)]
+    # class_names = [i for i in range(config.num_classes)]
     class_per_modality_names = [f"{config.modalities[mi].name}_{ci}" for mi in range(num_modalities) for ci in range(config.num_classes)]
 
     # Plot projections
@@ -649,12 +651,17 @@ def checkpoint_report_plots(
 
     # Plot confusion matrices
 
-    class_labels_pred = model.discriminator.predict(torch.tensor(latents).to(config.device)).cpu().numpy()
-    aux_modality_class_labels_pred = np.array(list(map(lambda i: class_labels_pred[i] + modality_labels[i]*config.num_classes, range(len(class_labels_pred)))), dtype=np.int32)  # using the modality of origin
+    class_pred, modality_pred = model.discriminator.predict(torch.tensor(latents).to(config.device), include_modality_pred=True)#.cpu().numpy()
+    class_pred = class_pred.cpu().numpy()
+    modality_pred = modality_pred.cpu().numpy()
+    class_per_modality_labels_pred = np.array([
+        class_pred + modality * config.num_classes
+        for class_pred, modality in zip(class_pred, modality_pred)
+    ])
 
     plot_confusion_matrix(
         class_labels,
-        class_labels_pred,
+        class_pred,
         performance_metrics = True,
         checkpoint_dir = checkpoint_dir,
         is_train = is_train,
@@ -664,9 +671,10 @@ def checkpoint_report_plots(
         text_size = 25
     )
 
+    # Class per modality
     plot_confusion_matrix(
         class_per_modality_labels,
-        aux_modality_class_labels_pred,
+        class_per_modality_labels_pred,
         performance_metrics = True,
         checkpoint_dir = checkpoint_dir,
         is_train = is_train,
@@ -680,7 +688,7 @@ def checkpoint_report_plots(
     for i in range(num_modalities):
         plot_confusion_matrix(
             class_labels[modality_labels == i],
-            class_labels_pred[modality_labels == i],
+            class_pred[modality_labels == i],
             performance_metrics = True,
             checkpoint_dir = checkpoint_dir,
             is_train = is_train,
