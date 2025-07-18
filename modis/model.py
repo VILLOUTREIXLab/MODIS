@@ -9,7 +9,7 @@ class VAE(nn.Module):
     Variational Autoencoder (VAE) class
     """
 
-    def __init__(self, input_size: int, latent_size: int): #, hidden_size: int):
+    def __init__(self, input_size: int, latent_size: int, hidden_size: int):
         super().__init__()
 
         def block(in_features: int, out_features: int, normalize: bool = True):
@@ -19,31 +19,36 @@ class VAE(nn.Module):
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
-        # Intersim
+        # # Previous version
+
         # self.encoder = nn.Sequential(
         #     *block(input_size, hidden_size),
         #     *block(hidden_size, hidden_size),
         #     nn.Linear(hidden_size, hidden_size)
         # )
 
+        # self.mu = nn.Linear(hidden_size, latent_size)
+        # self.logvar = nn.Linear(hidden_size, latent_size)
+
+        # self.decoder = nn.Sequential(
+        #     *block(latent_size, hidden_size),
+        #     *block(hidden_size, hidden_size),
+        #     *block(hidden_size, hidden_size),
+        #     nn.Linear(hidden_size, input_size)
+        # )
+
+        # Alternative
+
         self.encoder = nn.Sequential(
             *block(input_size, int(input_size*1.5)),
-            *block(int(input_size*1.5), int(input_size)),
-            *block(int(input_size), int(input_size*0.75)),
+            *block(int(input_size*1.5), input_size),
+            *block(input_size, int(input_size*0.75)),
             *block(int(input_size*0.75), int(input_size*0.5)),
             nn.Linear(int(input_size*0.5), int(input_size*0.25))
         )
 
         self.mu = nn.Linear(int(input_size*0.25), latent_size)
         self.logvar = nn.Linear(int(input_size*0.25), latent_size)
-
-        # Intersim
-        # self.decoder = nn.Sequential(
-        #     *block(latent_size, hidden_size),
-        #     *block(hidden_size, hidden_size),
-        #     *block(hidden_size, hidden_size),
-        #     nn.Linear(hidden_size, input_size),
-        # )
 
         self.decoder = nn.Sequential(
             *block(latent_size, int(input_size*0.25)),
@@ -139,7 +144,7 @@ class MODIS(nn.Module):
             VAE(
                 input_size = config.modalities[i].input_size,
                 latent_size = config.latent_size,
-                # hidden_size = config.modalities[i].hidden_size,
+                hidden_size = config.modalities[i].hidden_size,
             ).to(self.device) for i in range(self.num_modalities)
         ])
         self.discriminator = Discriminator(

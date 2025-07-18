@@ -130,7 +130,8 @@ class Trainer:
             'd_aux_acc': 0,
             'g_loss': 0,
             'modal_recon_loss': [],
-            'modal_kl_loss': []
+            'modal_kl_loss': [],
+            'd_adv_acc': 0
         }
 
         targets = []  # Modality labels
@@ -156,33 +157,32 @@ class Trainer:
 
         # Losses
 
-        d_adv_loss = torch.tensor(0., device=device)
-        for i in range(num_modalities):
-            d_adv_loss += self.ce_loss(d_adv[i], targets[i])
-
-        # # Relativistic GAN Loss (RpGAN)
         # d_adv_loss = torch.tensor(0., device=device)
         # for i in range(num_modalities):
-        #     fake_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != i]
-        #     fake_means_sum = torch.sum(torch.stack(fake_means), dim=0)  ## average instead?
-        #     real_loss = torch.nn.functional.relu(1 - (d_adv[i] - fake_means_sum)).mean()
+        #     d_adv_loss += self.ce_loss(d_adv[i], targets[i])
 
-        #     fake_loss = torch.tensor(0., device=device)
-        #     for j in range(num_modalities):
-        #         if i == j: continue
-        #         real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
-        #         real_means_sum = torch.sum(torch.stack(real_means), dim=0)
-        #         fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - real_means_sum)).mean()
+        # Relativistic GAN Loss (RpGAN)
+        d_adv_loss = torch.tensor(0., device=device)
+        for i in range(num_modalities):
+            fake_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != i]
+            fake_means_sum = torch.sum(torch.stack(fake_means), dim=0)  ## average instead?
+            real_loss = torch.nn.functional.relu(1 - (d_adv[i] - fake_means_sum)).mean()
 
-        #         # Other approach
-        #         # fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - d_adv_means[i])).mean()
+            fake_loss = torch.tensor(0., device=device)
+            for j in range(num_modalities):
+                if i == j: continue
+                # real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
+                # real_means_sum = torch.sum(torch.stack(real_means), dim=0)
+                # fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - real_means_sum)).mean()
 
-        #     d_adv_loss += real_loss - fake_loss
+                # Other approach
+                fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - d_adv_means[i])).mean()
 
-        # # Gradient penalties of all data (R1 and R2 regularization)
-        # # for i in range(num_modalities):
-        # penalty = self.regularization(x) * self.config.lambda_r
-        # d_adv_loss += penalty
+            d_adv_loss += real_loss - fake_loss
+
+        # Gradient penalties of all data (R1 and R2 regularization)
+        penalty = self.regularization(x) * self.config.lambda_r
+        d_adv_loss += penalty
 
         # Auxiliary loss
         d_aux_loss = torch.tensor(0., device=device)
@@ -236,52 +236,46 @@ class Trainer:
         for i in range(num_modalities):
             d_adv_means.append(d_adv[i].mean())
 
-        # Classifier accuracy
-        d_aux_acc = 0
-        if self.config.training_mode == 'supervised':
-            for i in range(num_modalities):
-                d_aux_acc += accuracy(d_aux[i], y[i])
-        else:
-            for i in range(num_modalities):
-                labeled_mask = is_labeled[i]
-                if sum(labeled_mask) > 0:
-                    # Evaluate accuracy only on labeled samples
-                    d_aux_acc += accuracy(d_aux[i][labeled_mask], y[i])
-        d_aux_acc /= num_modalities
+        # Modality pred accuracy
+        d_adv_modal_acc = [accuracy(d_adv[i], targets[i]) for i in range(num_modalities)]
+        d_adv_acc = sum(d_adv_modal_acc) / num_modalities
 
-        ### instead of doing avg among modalities
-        # d_aux_total = torch.concat([d_aux[i][is_labeled[i]] for i in range(num_modalities)], dim=0)
-        # y_total = torch.concat([y[i] for i in range(num_modalities)], dim=0)
-        # if y_total.size(0) == 0:
-        #     print(d_aux_acc, None)
-        # else:
-        #     print(d_aux_acc, accuracy(d_aux_total, y_total))
-        ####
+        # Classifier accuracy
+        if self.config.training_mode == 'supervised':
+            d_aux_acc = sum(accuracy(d_aux[i], y[i]) for i in range(num_modalities)) / num_modalities
+        else:
+            # Evaluate accuracy only on labeled samples
+            d_aux_acc = sum(
+                accuracy(d_aux[i][is_labeled[i]], y[i])
+                for i in range(num_modalities)
+                if sum(is_labeled[i]) > 0
+            ) / num_modalities
 
         # Losses
 
         # Reconstruction
         recon_losses_modal = [self.mse_loss(recon_x[i], x[i]) for i in range(num_modalities)]
-        recon_loss = sum(recon_losses_modal)
+        recon_loss = sum(recon_losses_modal)  # torch.stack(recon_losses_modal).mean(dim=0)
         
         # KL
         kl_loss_modal = [-0.5 * torch.sum(1 + logvar[i] - mu[i].pow(2) - logvar[i].exp()) for i in range(num_modalities)]
-        kl_loss = sum(kl_loss_modal)
+        kl_loss = sum(kl_loss_modal)  # torch.stack(kl_loss_modal).mean(dim=0)
 
-        # Discriminator
-        d_adv_loss = torch.tensor(0., device=device)
-        for i in range(num_modalities):
-            for j in range(num_modalities):
-                if i == j: continue
-                d_adv_loss += self.ce_loss(d_adv[i], targets[j])
-
-        # # Discriminator
+        # # Discriminator adv
         # d_adv_loss = torch.tensor(0., device=device)
-        # for j in range(num_modalities):
-        #     real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
-        #     real_means_sum = torch.sum(torch.stack(real_means), dim=0)
-        #     d_adv_loss += torch.nn.functional.relu(1 - (d_adv[j] - real_means_sum)).mean()
+        # for i in range(num_modalities):
+        #     for j in range(num_modalities):
+        #         if i == j: continue
+        #         d_adv_loss += self.ce_loss(d_adv[i], targets[j])
 
+        # Discriminator adv
+        d_adv_loss = torch.tensor(0., device=device)
+        for j in range(num_modalities):
+            real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
+            real_means_sum = torch.sum(torch.stack(real_means), dim=0)
+            d_adv_loss += torch.nn.functional.relu(1 - (d_adv[j] - real_means_sum)).mean()
+
+        # Discriminator aux
         d_aux_loss = torch.tensor(0., device=device)
         for i in range(num_modalities):
             if self.config.training_mode == 'supervised':
@@ -296,10 +290,10 @@ class Trainer:
             d_cluster_loss += self.cluster_loss(d_adv[i], d_aux[i], d_hidden[i])
 
         # d_loss = (1 / (num_modalities-1) * d_adv_loss) + d_aux_loss #+ d_cluster_loss  # Divide adversarial loss by the number of combinations
-        # d_loss = d_adv_loss + d_aux_loss + d_cluster_loss
+        # d_loss = (1 / (num_modalities-1) * d_adv_loss) + d_aux_loss
         d_loss = d_adv_loss + d_aux_loss
 
-        g_loss = recon_loss + (self.config.beta * kl_loss) + d_loss + d_cluster_loss
+        g_loss = 10*recon_loss + (self.config.beta * kl_loss) + d_loss + d_cluster_loss
 
         # Backpropagation
         self.optimizer.zero_grad()
@@ -314,6 +308,7 @@ class Trainer:
         metrics['kl_loss'] = kl_loss.item()
         metrics['d_loss'] = d_loss.item()
         metrics['d_cluster_loss'] = d_cluster_loss.item()
+        metrics['d_adv_acc'] = d_adv_acc
         metrics['d_aux_acc'] = d_aux_acc
         metrics['g_loss'] = g_loss.item()
         metrics['modal_recon_loss'].extend([loss.item() for loss in recon_losses_modal])
@@ -349,7 +344,10 @@ def train(
 
     if args.checkpoint:
         checkpoint_data = load_checkpoint(args.checkpoint)
-        log = load_log(args.checkpoint.parent)
+
+        snapshot = args.checkpoint.stem.split('_')[-1]
+        log_file = args.checkpoint.parent / f"checkpoint_log_{snapshot}.json"
+        log = load_log(log_file)
 
         timestamp = checkpoint_data['timestamp']
         init_epoch = checkpoint_data['epoch']+1
