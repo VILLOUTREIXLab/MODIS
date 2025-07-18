@@ -5,6 +5,7 @@ from typing import Literal
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 # import umap.umap_ as umap
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -698,3 +699,56 @@ def checkpoint_report_plots(
             text_size = 25,
             filename_suffix = f'modality_{modality_names[i]}'
         )
+
+def calc_reconstruction_and_translation_mse(
+    x: list[torch.Tensor],
+    model,
+    save_plot: bool = False,
+    save_dir: pathlib.Path = pathlib.Path('.'),
+    text_size: int = 30,
+    vmin: float = 0,
+    vmax: float = 0.1
+):
+    if save_plot:
+        if not save_dir.exists():
+            raise FileNotFoundError(f"Checkpoint dir {save_dir} doesn't exist.")
+
+    num_modalities = len(x)
+
+    translations = {}
+    for input_modality in range(num_modalities):
+        translations[input_modality] = {}
+        for output_modality in range(num_modalities):
+            translations[input_modality][output_modality] = model.translate(
+                                                                x[input_modality],
+                                                                input_modality=input_modality,
+                                                                output_modality=output_modality
+            )
+
+    mse_matrix = np.zeros((num_modalities, num_modalities))
+    for ii in range(num_modalities):
+        for it in range(num_modalities):
+            mse_matrix[ii, it] = np.mean((translations[ii][it] - x[it].cpu().numpy())**2)
+
+    plt.figure(figsize=(8, 7))
+    ax = sns.heatmap(mse_matrix, annot=True, fmt=".4f", cmap="coolwarm", linewidths=0.5, cbar=True, annot_kws={"size": text_size}, vmin=vmin, vmax=vmax)
+
+    plt.xlabel("output modality", fontsize=text_size)
+    plt.ylabel("input modality", fontsize=text_size)
+
+    ticks = [str(i+1) for i in range(num_modalities)]
+    ax.set_xticklabels(ticks, fontsize=text_size)
+    ax.set_yticklabels(ticks, fontsize=text_size)
+
+    # plt.title("MSE Heatmap", fontsize=text_size)
+
+    # Customize colorbar
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=text_size)
+
+    if save_plot:
+        figure_file = save_dir / "reconstruction_translation_mse_matrix.svg"
+        plt.savefig(figure_file, format='svg', bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
