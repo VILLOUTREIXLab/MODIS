@@ -476,8 +476,8 @@ def plot_confusion_matrix(
     
     if performance_metrics:
         # Calculate precision and recall
-        precision = np.nan_to_num(np.diag(cm) / cm.sum(axis=0))
-        recall = np.nan_to_num(np.diag(cm) / cm.sum(axis=1))
+        precision = np.nan_to_num(np.diag(cm) / np.where(cm.sum(axis=0) > 0, cm.sum(axis=0), 1e-9))
+        recall = np.nan_to_num(np.diag(cm) / np.where(cm.sum(axis=1) > 0, cm.sum(axis=1), 1e-9))
 
         num_classes = len(np.unique(true_labels))
 
