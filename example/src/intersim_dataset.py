@@ -4,7 +4,7 @@ import pathlib
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from sklearn.preprocessing import MinMaxScaler  #, StandardScaler
+from sklearn.preprocessing import MinMaxScaler  #, StandardScaler, MinMaxScaler
 
 class IntersimDataset(Dataset):
     """InterSIM Dataset class"""
