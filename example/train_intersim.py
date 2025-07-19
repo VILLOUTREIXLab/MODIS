@@ -38,8 +38,8 @@ if config.training_mode == 'semisupervised':
     # train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0, random_seed=random_seed) for dataset in train_datasets]
 
     # Semisupervised dataset
-    train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0.00, random_seed=random_seed) for dataset in train_datasets]
-    # train_datasets = [SemiSupervisedDataset(dataset, class_samples=[1, 1, 1, 1, 1], random_seed=random_seed) for dataset in train_datasets]
+    # train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0.01, random_seed=random_seed) for dataset in train_datasets]
+    train_datasets = [SemiSupervisedDataset(dataset, class_samples=[3, 3, 3, 3, 3], random_seed=random_seed) for dataset in train_datasets]
 
 # Train model
 # checkpoint_dir = modis.train(config_file, train_datasets, summarize_datasets=True, report_plots=True)

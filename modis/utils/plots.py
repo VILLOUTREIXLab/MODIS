@@ -85,14 +85,14 @@ def plot_training_log(
     plt.grid()
 
     plt.subplot(2, 3, 4)
-    plt.plot(x, g_loss, label='g_loss')
+    plt.plot(x, d_cluster_loss, label='d_cluster_loss')
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.legend(prop={'size': 11})
     plt.grid()
 
     plt.subplot(2, 3, 5)
-    plt.plot(x, d_cluster_loss, label='d_cluster_loss')
+    plt.plot(x, g_loss, label='g_loss')
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.legend(prop={'size': 11})
