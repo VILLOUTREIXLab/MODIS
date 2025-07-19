@@ -257,7 +257,7 @@ class Trainer:
         # Reconstruction
         recon_losses_modal = [self.mse_loss(recon_x[i], x[i]) for i in range(num_modalities)]
         recon_loss = sum(recon_losses_modal)  # torch.stack(recon_losses_modal).mean(dim=0)
-        
+
         # KL
         kl_loss_modal = [-0.5 * torch.sum(1 + logvar[i] - mu[i].pow(2) - logvar[i].exp()) for i in range(num_modalities)]
         kl_loss = sum(kl_loss_modal)  # torch.stack(kl_loss_modal).mean(dim=0)
@@ -417,16 +417,16 @@ def train(
         if val_datasets is not None:
             val_metrics = evaluate_model(trainer.model, train_dataloaders)
             epoch_metrics['val_acc'] = val_metrics.get('acc', 0.)
-            val_acc_str = f"val_acc: {epoch_metrics['val_acc']}"
+            val_acc_str = f"val_acc: {epoch_metrics['val_acc']:.4f}"
 
         #
         log.append(epoch_metrics)
 
         print(
             f"epoch: {epoch+1}/{init_epoch + config.num_epochs}, "
-            f"d_train_loss: {epoch_metrics['d_train_loss']:.4f}, "
             f"recon_loss: {epoch_metrics['recon_loss']:.4f}, "
             f"kl_loss: {epoch_metrics['kl_loss']:.4f}, "
+            f"d_train_loss: {epoch_metrics['d_train_loss']:.4f}, "
             f"d_loss: {epoch_metrics['d_loss']:.4f}, "
             f"d_cluster_loss: {epoch_metrics['d_cluster_loss']:.4f}, "
             f"g_loss: {epoch_metrics['g_loss']:.4f}, "
@@ -538,6 +538,7 @@ def train(
         )
 
         if val_datasets is not None:
+            print()
             checkpoint_report_plots(
                 checkpoint_dir = checkpoint_dir,
                 config_file = config_file,
