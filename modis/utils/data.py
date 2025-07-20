@@ -5,8 +5,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, Subset
 
-class SemiSupervisedDataset(Dataset):
-    """Manipulate the labels of a labeled dataset for semisupervision with MODIS"""
+class PartiallyLabeledDataset(Dataset):
+    """Adjust the labels in a labeled dataset for semisupervised mode with MODIS"""
 
     def __init__(
         self,

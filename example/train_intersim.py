@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import random_split
 
 import modis
-from modis.utils.data import SemiSupervisedDataset
+from modis.utils.data import PartiallyLabeledDataset
 
 from src.intersim_dataset import get_datasets
 
@@ -35,11 +35,11 @@ from modis.utils.config import load_config
 config = load_config(config_file)
 if config.training_mode == 'semisupervised':
     # Unsupervised dataset
-    # train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0, random_seed=random_seed) for dataset in train_datasets]
+    # train_datasets = [PartiallyLabeledDataset(dataset, labeled_ratio=0, random_seed=random_seed) for dataset in train_datasets]
 
     # Semisupervised dataset
-    # train_datasets = [SemiSupervisedDataset(dataset, labeled_ratio=0.1, random_seed=random_seed) for dataset in train_datasets]
-    train_datasets = [SemiSupervisedDataset(dataset, class_samples=[4, 4, 4, 4, 4], random_seed=random_seed) for dataset in train_datasets]
+    # train_datasets = [PartiallyLabeledDataset(dataset, labeled_ratio=0.1, random_seed=random_seed) for dataset in train_datasets]
+    train_datasets = [PartiallyLabeledDataset(dataset, class_samples=[4, 4, 4, 4, 4], random_seed=random_seed) for dataset in train_datasets]
 
 # Train model
 # checkpoint_dir = modis.train(config_file, train_datasets, summarize_datasets=True, report_plots=True)
