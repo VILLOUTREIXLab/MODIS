@@ -545,7 +545,6 @@ def train(
         )
 
         if val_datasets is not None:
-            print()
             checkpoint_report_plots(
                 checkpoint_dir = checkpoint_dir,
                 config_file = config_file,

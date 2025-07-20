@@ -4,17 +4,14 @@ latent_size: 64
 modalities:
   - name: dna_methyl
     input_size: 367
-    hidden_size: 512
   - name: gene_expr
     input_size: 131
-    hidden_size: 256
   - name: protein_exp
     input_size: 160
-    hidden_size: 256
 training_mode: semisupervised
 num_classes: 5
 batch_size: 32
-num_epochs: 10
+num_epochs: 12
 generators_lr: 1e-4
 discriminator_lr: 1e-4
 beta: 5e-4 # 5e-4

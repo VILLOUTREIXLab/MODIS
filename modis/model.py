@@ -9,55 +9,46 @@ class VAE(nn.Module):
     Variational Autoencoder (VAE) class
     """
 
-    def __init__(self, input_size: int, latent_size: int, hidden_size: int):
+    def __init__(
+        self,
+        input_size: int,
+        encoder_ratios: list[float],
+        latent_size: int
+    ):
         super().__init__()
 
-        def block(in_features: int, out_features: int, normalize: bool = True):
+        def block(in_features: int, out_features: int, normalize: bool = False):
             layers = [nn.Linear(in_features, out_features)]
             if normalize:
                 layers.append(nn.BatchNorm1d(out_features, 0.8))
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
-        # # Previous version
+        def build_from_ratios(input_size: int, ratios: list, output_size: int, decoder: bool = False):
+            layers = []
+            current_size = input_size
+            for i, ratio in enumerate(ratios):
+                next_size = int(input_size * ratio) if not decoder else int(output_size * ratio)
+                if i == len(ratios) - 1:  # Last layer
+                    if decoder:
+                        layers.extend(block(current_size, next_size))
+                        layers.append(nn.Linear(next_size, output_size))
+                    else:
+                        layers.append(nn.Linear(current_size, next_size))
+                else:
+                    layers.extend(block(current_size, next_size))
+                current_size = next_size
+            return nn.Sequential(*layers)
 
-        # self.encoder = nn.Sequential(
-        #     *block(input_size, hidden_size),
-        #     *block(hidden_size, hidden_size),
-        #     nn.Linear(hidden_size, hidden_size)
-        # )
+        # Define scaling ratios
+        decoder_ratios = encoder_ratios[::-1]  # Relative to input_size
 
-        # self.mu = nn.Linear(hidden_size, latent_size)
-        # self.logvar = nn.Linear(hidden_size, latent_size)
-
-        # self.decoder = nn.Sequential(
-        #     *block(latent_size, hidden_size),
-        #     *block(hidden_size, hidden_size),
-        #     *block(hidden_size, hidden_size),
-        #     nn.Linear(hidden_size, input_size)
-        # )
-
-        # Alternative
-
-        self.encoder = nn.Sequential(
-            *block(input_size, int(input_size*1.5)),
-            *block(int(input_size*1.5), input_size),
-            *block(input_size, int(input_size*0.75)),
-            *block(int(input_size*0.75), int(input_size*0.5)),
-            nn.Linear(int(input_size*0.5), int(input_size*0.25))
-        )
-
-        self.mu = nn.Linear(int(input_size*0.25), latent_size)
-        self.logvar = nn.Linear(int(input_size*0.25), latent_size)
-
-        self.decoder = nn.Sequential(
-            *block(latent_size, int(input_size*0.25)),
-            *block(int(input_size*0.25), int(input_size*0.5)),
-            *block(int(input_size*0.5), int(input_size*0.75)),
-            *block(int(input_size*0.75), int(input_size)),
-            *block(int(input_size), int(input_size*1.5)),
-            nn.Linear(int(input_size*1.5), input_size)
-        )
+        bottleneck_size = int(input_size * encoder_ratios[-1])
+        
+        self.encoder = build_from_ratios(input_size, encoder_ratios, latent_size)
+        self.mu = nn.Linear(bottleneck_size, latent_size)
+        self.logvar = nn.Linear(bottleneck_size, latent_size)
+        self.decoder = build_from_ratios(latent_size, decoder_ratios, input_size, decoder=True)
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -143,8 +134,8 @@ class MODIS(nn.Module):
         self.variational_autoencoders = nn.ModuleList([
             VAE(
                 input_size = config.modalities[i].input_size,
-                latent_size = config.latent_size,
-                hidden_size = config.modalities[i].hidden_size,
+                encoder_ratios = [2, 1.0, 0.75, 0.5, 0.25] if not 'encoder_ratios' in config.modalities[i] else config.modalities[i].encoder_ratios,
+                latent_size = config.latent_size
             ).to(self.device) for i in range(self.num_modalities)
         ])
         self.discriminator = Discriminator(
