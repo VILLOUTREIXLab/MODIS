@@ -11,7 +11,7 @@ modalities:
   - name: protein_exp
     input_size: 160
     hidden_size: 256
-training_mode: supervised
+training_mode: semisupervised
 num_classes: 5
 batch_size: 32
 num_epochs: 10

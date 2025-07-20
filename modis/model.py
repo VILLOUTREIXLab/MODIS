@@ -121,7 +121,7 @@ class Discriminator(nn.Module):
         # class_pred = torch.argmax(F.softmax(aux_out, dim=1), dim=1)
         class_pred = torch.argmax(aux_out, dim=1)
 
-        if include_modality_pred:  # useless for pred (~33% acc by design)
+        if include_modality_pred:  # useless for pred ((100/num_modalities)% acc by design)
             adv_out = self.adv_layer(hidden)
             modality_pred = torch.argmax(adv_out, dim=1)
             return class_pred, modality_pred

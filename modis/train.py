@@ -36,8 +36,7 @@ class Trainer:
         self.config = config
 
         # # Initialize weights
-        # self.discriminator.apply(weights_init)
-        # self.generator.apply(weights_init)
+        # self.model.apply(weights_init)
 
         # Optimizers
         self.optimizer = torch.optim.Adam(
@@ -101,17 +100,15 @@ class Trainer:
         self.optimizer.load_state_dict(checkpoint_data['optimizer_state'])
         print(f"Loaded state from checkpoint")
 
-    def zero_centered_gradient_penalty(self, x: list):
-        penalty = torch.tensor(0., device=self.model.device)
-        for i in range(len(x)):
-            modal_samples = x[i].detach().requires_grad_(True)
+    def zero_centered_gradient_penalty(self, x: torch.Tensor, modality_index: int) -> torch.Tensor:
+        modal_samples = x.detach().requires_grad_(True)
 
-            # Logits from discriminator
-            latents = self.model.variational_autoencoders[i].latents(modal_samples)
-            d_adv, _, _ = self.model.discriminator(latents)
+        # Logits from discriminator
+        latents = self.model.variational_autoencoders[modality_index].latents(modal_samples)
+        d_adv, _, _ = self.model.discriminator(latents)
 
-            grad = torch.autograd.grad(outputs=d_adv.sum(), inputs=modal_samples, create_graph=True)[0]
-            penalty += torch.mean(grad.norm(2, dim=1)**2)
+        grad = torch.autograd.grad(outputs=d_adv.sum(), inputs=modal_samples, create_graph=True)[0]
+        penalty = torch.mean(grad.norm(2, dim=1)**2)
 
         return penalty
 
@@ -126,6 +123,7 @@ class Trainer:
             'd_cluster_loss': 0,
             'd_aux_acc': 0,
             'g_loss': 0,
+            'r': [],
             'modal_recon_loss': [],
             'modal_kl_loss': [],
             'd_adv_acc': 0
@@ -184,7 +182,9 @@ class Trainer:
             fake_digits = sum([d_adv[idx] for idx in range(num_modalities) if idx != i])
             relativistic_logits += d_adv[i] - fake_digits
         d_adv_loss = torch.nn.functional.softplus(-relativistic_logits)
-        d_adv_loss += self.zero_centered_gradient_penalty(x) * self.config.lambda_r / 2
+
+        r = [self.zero_centered_gradient_penalty(x[i], modality_index=i) for i in range(num_modalities)]
+        d_adv_loss += sum(r) * self.config.lambda_r / 2
         d_adv_loss = d_adv_loss.mean()
 
         # Auxiliary loss
@@ -216,6 +216,7 @@ class Trainer:
 
         # Logging
         metrics['d_train_loss'] = d_train_loss.item()
+        metrics['r'] = [penalty.item() for penalty in r]
 
         # ---------------
         # Train generators (VAEs)
