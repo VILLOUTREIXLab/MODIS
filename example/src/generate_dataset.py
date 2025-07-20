@@ -1,10 +1,9 @@
-import os
 import pathlib
 
-import pandas as pd
 import torch
+import pandas as pd
 from torch.utils.data import Dataset
-from sklearn.preprocessing import MinMaxScaler  #, StandardScaler, MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler
 
 class IntersimDataset(Dataset):
     """InterSIM Dataset class"""
@@ -39,7 +38,7 @@ def load_dataset(
     dataset_name,
     pairing: str = 'unpaired',
     split: str = 'train',
-    data_path: str = '../data'
+    data_dir: str = '../data'
 ) -> list[pd.DataFrame]:
     """Load the InterSIM generated data"""
 
@@ -53,8 +52,8 @@ def load_dataset(
     
     data = []
     for omic in dataset_omics:
-        x_path = pathlib.Path(data_path) / dataset_name / f"{dataset_name}_{omic}_{pairing}_x_{split}.tab"
-        y_path = pathlib.Path(data_path) / dataset_name / f"{dataset_name}_{omic}_{pairing}_y_{split}.tab"
+        x_path = pathlib.Path(data_dir) / dataset_name / f"{dataset_name}_{omic}_{pairing}_x_{split}.tab"
+        y_path = pathlib.Path(data_dir) / dataset_name / f"{dataset_name}_{omic}_{pairing}_y_{split}.tab"
         x_df = pd.read_csv(x_path, sep='\t', header=0, index_col=0)
         y_df = pd.read_csv(y_path, sep='\t', header=0, index_col=0)
         data.append((x_df, y_df))
@@ -65,30 +64,21 @@ def get_datasets(
     dataset_name: str,
     pairing: str = 'unpaired',
     split: str = 'train',
-    data_path: str = './data',
+    data_dir: str = './data',
     include_sample_ids: bool = False
 ) -> list[IntersimDataset]:
-    """
-    Load a InterSIM generated dataset and prepare it for loading
-
-    Args:
-        dataset_name (str): Name of the folder containing the dataset
-
-    Return:
-        list(IntersimDataset): A list with a IntersimDataset class for each omic 
-    """
+    """Load the InterSIM generated dataset and prepare it for loading"""
     
     # Load the InterSIM dataset
     data = load_dataset(
         dataset_name = dataset_name,
         pairing = pairing,
         split = split,
-        data_path = data_path
+        data_dir = data_dir
     )
     
     # Normalization
-    # scaler = StandardScaler()
-    scaler = MinMaxScaler()  # it has a smaller reconstruction loss
+    scaler = MinMaxScaler()
     normalized = [
         (pd.DataFrame(scaler.fit_transform(x), columns=x.columns, index=x.index), y-1)  # Adjust labels to zero-index
         for x, y in data

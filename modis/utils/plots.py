@@ -101,7 +101,7 @@ def plot_training_log(
 
     plt.subplot(3, 3, 6)
     for i in range(num_modalities):
-        plt.plot(x, penalties[i], label=f'r{i+1}')
+        plt.plot(x, penalties[i], label=f'R{i+1}')
     plt.xlabel('epoch')
     plt.ylabel('penalty')
     plt.legend(prop={'size': 11})

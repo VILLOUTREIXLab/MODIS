@@ -1,5 +1,5 @@
 dataset_name: intersim_2_delta
-model_name: intersim
+model_name: intersim_semisupervised
 latent_size: 64
 modalities:
   - name: dna_methyl
@@ -11,10 +11,10 @@ modalities:
 training_mode: semisupervised
 num_classes: 5
 batch_size: 32
-num_epochs: 12
+num_epochs: 20
 generators_lr: 1e-4
 discriminator_lr: 1e-4
-beta: 5e-4 # 5e-4
+beta: 5e-4
 beta1: 0.5
 lambda_r: 10.0
 device: auto
