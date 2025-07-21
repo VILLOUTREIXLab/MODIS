@@ -25,7 +25,7 @@ def plot_training_log(
     checkpoint_dir: pathlib.Path,
     use_best: bool = True,
     save_plot: bool = False,
-    figsize: tuple = (15, 15)
+    figsize: tuple = (15, 10)
 ) -> None:
     """Plot training log"""
     from modis import load_log  # Import here to avoid partially initialized module error 
@@ -49,7 +49,7 @@ def plot_training_log(
     d_train_loss = [item['d_train_loss'] for item in log]
     d_loss = [item['d_loss'] for item in log]
     g_loss = [item['g_loss'] for item in log]
-    d_cluster_loss = [item['d_cluster_loss'] for item in log]
+    # d_cluster_loss = [item['d_cluster_loss'] for item in log]
     penalties = [[item['r'][i] for item in log] for i in range(num_modalities)]
     d_adv_acc = [item['d_adv_acc'] for item in log]
     d_aux_acc = [item['d_aux_acc'] for item in log]
@@ -59,7 +59,7 @@ def plot_training_log(
     fig = plt.figure(figsize=figsize)
     fig.suptitle(f'Training mode: {training_mode}', y=0.97)
 
-    plt.subplot(3, 3, 1)
+    plt.subplot(2, 3, 1)
     # plt.plot(x, recon_loss, label='recon_loss')
     for i in range(num_modalities):
         plt.plot(x, modal_recon_loss[i], label=f'recon_loss_{modality_names[i]}')
@@ -68,7 +68,7 @@ def plot_training_log(
     plt.legend(prop={'size': 11})
     plt.grid()
 
-    plt.subplot(3, 3, 2)
+    plt.subplot(2, 3, 2)
     # plt.plot(x, kl_loss, label='kl_loss')
     for i in range(num_modalities):
         plt.plot(x, kl_loss_modal[i], label=f'kl_loss_{modality_names[i]}')
@@ -77,7 +77,7 @@ def plot_training_log(
     plt.legend(prop={'size': 11})
     plt.grid()
 
-    plt.subplot(3, 3, 3)
+    plt.subplot(2, 3, 3)
     plt.plot(x, d_train_loss, label='d_train_loss')
     plt.plot(x, d_loss, label='d_loss')
     plt.xlabel('epoch')
@@ -85,21 +85,21 @@ def plot_training_log(
     plt.legend(prop={'size': 11})
     plt.grid()
 
-    plt.subplot(3, 3, 4)
-    plt.plot(x, d_cluster_loss, label='d_cluster_loss')
-    plt.xlabel('epoch')
-    plt.ylabel('loss')
-    plt.legend(prop={'size': 11})
-    plt.grid()
+    # plt.subplot(2, 3, 4)
+    # plt.plot(x, d_cluster_loss, label='d_cluster_loss')
+    # plt.xlabel('epoch')
+    # plt.ylabel('loss')
+    # plt.legend(prop={'size': 11})
+    # plt.grid()
 
-    plt.subplot(3, 3, 5)
+    plt.subplot(2, 3, 4)
     plt.plot(x, g_loss, label='g_loss')
     plt.xlabel('epoch')
     plt.ylabel('loss')
     plt.legend(prop={'size': 11})
     plt.grid()
 
-    plt.subplot(3, 3, 6)
+    plt.subplot(2, 3, 5)
     for i in range(num_modalities):
         plt.plot(x, penalties[i], label=f'R{i+1}')
     plt.xlabel('epoch')
@@ -107,7 +107,7 @@ def plot_training_log(
     plt.legend(prop={'size': 11})
     plt.grid()
 
-    plt.subplot(3, 3, 7)
+    plt.subplot(2, 3, 6)
     plt.plot(x, d_adv_acc, label='d_adv_acc')
     plt.plot(x, d_aux_acc, label='d_aux_acc')
     if 'val_acc' in log[0]:

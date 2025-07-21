@@ -435,7 +435,6 @@ def train(
             f"kl_loss: {epoch_metrics['kl_loss']:.4f}, "
             f"d_train_loss: {epoch_metrics['d_train_loss']:.4f}, "
             f"d_loss: {epoch_metrics['d_loss']:.4f}, "
-            f"d_cluster_loss: {epoch_metrics['d_cluster_loss']:.4f}, "
             f"g_loss: {epoch_metrics['g_loss']:.4f}, "
             f"d_aux_acc: {epoch_metrics['d_aux_acc']:.4f}"
             f" {val_acc_str}"
