@@ -17,7 +17,7 @@ class VAE(nn.Module):
     ):
         super().__init__()
 
-        def block(in_features: int, out_features: int, normalize: bool = False):
+        def block(in_features: int, out_features: int, normalize: bool = True):
             layers = [nn.Linear(in_features, out_features)]
             if normalize:
                 layers.append(nn.BatchNorm1d(out_features, 0.8))

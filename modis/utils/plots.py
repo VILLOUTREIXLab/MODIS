@@ -39,6 +39,7 @@ def plot_training_log(
         log_file = checkpoint_dir / "checkpoint_log_latest.json"
     log = load_log(log_file)
 
+    relativistic = len(log[0]['r']) > 0
     num_modalities = len(log[0]['modal_recon_loss'])
     x = range(log[0]['epoch_idx'] + 1, log[-1]['epoch_idx'] + 2)
 
@@ -50,7 +51,8 @@ def plot_training_log(
     d_loss = [item['d_loss'] for item in log]
     g_loss = [item['g_loss'] for item in log]
     # d_cluster_loss = [item['d_cluster_loss'] for item in log]
-    penalties = [[item['r'][i] for item in log] for i in range(num_modalities)]
+    if relativistic:
+        penalties = [[item['r'][i] for item in log] for i in range(num_modalities)]
     d_adv_acc = [item['d_adv_acc'] for item in log]
     d_aux_acc = [item['d_aux_acc'] for item in log]
     if 'val_acc' in log[0]:
@@ -99,15 +101,17 @@ def plot_training_log(
     plt.legend(prop={'size': 11})
     plt.grid()
 
-    plt.subplot(2, 3, 5)
-    for i in range(num_modalities):
-        plt.plot(x, penalties[i], label=f'R{i+1}')
-    plt.xlabel('epoch')
-    plt.ylabel('penalty')
-    plt.legend(prop={'size': 11})
-    plt.grid()
+    if relativistic:
+        plt.subplot(2, 3, 5)
+        for i in range(num_modalities):
+            plt.plot(x, penalties[i], label=f'R{i+1}')
+        plt.xlabel('epoch')
+        plt.ylabel('penalty')
+        plt.legend(prop={'size': 11})
+        plt.grid()
 
-    plt.subplot(2, 3, 6)
+    subplot_index = 6 if relativistic else 5
+    plt.subplot(2, 3, subplot_index)
     plt.plot(x, d_adv_acc, label='d_adv_acc')
     plt.plot(x, d_aux_acc, label='d_aux_acc')
     if 'val_acc' in log[0]:
