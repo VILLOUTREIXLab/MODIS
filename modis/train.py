@@ -193,9 +193,8 @@ class Trainer:
             if self.config.training_mode == 'supervised':
                 d_aux_loss += self.ce_loss(d_aux[i], y[i])
             else:
-                labeled_mask = is_labeled[i]
-                if sum(labeled_mask) > 0:
-                    d_aux_loss += self.ce_loss(d_aux[i][labeled_mask], y[i])
+                if sum(is_labeled[i]) > 0:
+                    d_aux_loss += self.ce_loss(d_aux[i][is_labeled[i]], y[i][is_labeled[i]])
 
         # Cluster loss
         d_cluster_loss = torch.tensor(0., device=device)
@@ -246,7 +245,7 @@ class Trainer:
         else:
             # Evaluate accuracy on labeled samples only
             d_aux_acc = sum(
-                accuracy(d_aux[i][is_labeled[i]], y[i])
+                accuracy(d_aux[i][is_labeled[i]], y[i][is_labeled[i]])
                 for i in range(num_modalities)
                 if sum(is_labeled[i]) > 0
             ) / num_modalities
@@ -289,9 +288,8 @@ class Trainer:
             if self.config.training_mode == 'supervised':
                 d_aux_loss += self.ce_loss(d_aux[i], y[i])
             else:
-                labeled_mask = is_labeled[i]
-                if sum(labeled_mask) > 0:
-                    d_aux_loss += self.ce_loss(d_aux[i][labeled_mask], y[i])
+                if sum(is_labeled[i]) > 0:
+                    d_aux_loss += self.ce_loss(d_aux[i][is_labeled[i]], y[i][is_labeled[i]])
 
         d_cluster_loss = torch.tensor(0., device=device)
         for i in range(num_modalities):
@@ -397,16 +395,14 @@ def train(
             y = []
             is_labeled = []
             for i in range(len(config.modalities)):
-                mx, my = data[i][0], data[i][1]
-                x.append(mx.to(device))
-                is_labeled.append(torch.tensor([True if label != -1 else False for label in my]))
-                # Remove unlabeled data when in supervised mode
+                modal_x, modal_y = data[i][0], data[i][1]
+                x.append(modal_x.to(device))
+                y.append(modal_y.to(device))
+                is_labeled.append(torch.tensor([True if label >= 0 else False for label in modal_y]))
+
                 if config.training_mode == 'supervised':
-                    if sum(is_labeled[i]) != mx.size(0):
-                        raise Exception('Supervised training requires all samples to be labeled (avoid -1 labels)')
-                    y.append(my.to(device))
-                else:
-                    y.append(my[is_labeled[i]].to(device))
+                    if sum(is_labeled[i]) != modal_x.size(0):
+                        raise Exception("Supervised training requires all samples to be labeled, -1 labels are invalid")
 
             # Train step
             batch_metrics = trainer.train_step(x, y, is_labeled)

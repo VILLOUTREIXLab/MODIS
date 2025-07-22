@@ -109,25 +109,28 @@ def evaluate_model(model, dataloaders) -> dict:
 
     return metrics
 
-def all_pairs_mse(X: np.ndarray, X_hat: np.ndarray):
-    """
-    Calculates the mean squared error (MSE) for all pairs of samples between X and X_hat
 
-    Args:
-        X (np.ndarray): First input array of shape [n_samples_X, n_features]
-        X_hat (np.ndarray): Second input array of shape [n_samples_X_hat, n_features]
+## This is counting both directions of the pais, not unique pairs, fix
+## includes self-comparisons?
+# def all_pairs_mse(X: np.ndarray, X_hat: np.ndarray):
+#     """
+#     Calculates the mean squared error (MSE) for all pairs of samples between X and X_hat
 
-    Returns:
-        float: The overall mean of the MSE matrix
-    """
-    # Broadcast to [n_samples_X, n_samples_X_hat, n_features]
-    differences = X[:, np.newaxis, :] - X_hat[np.newaxis, :, :]
+#     Args:
+#         X (np.ndarray): First input array of shape [n_samples_X, n_features]
+#         X_hat (np.ndarray): Second input array of shape [n_samples_X_hat, n_features]
+
+#     Returns:
+#         float: The overall mean of the MSE matrix
+#     """
+#     # Broadcast to [n_samples_X, n_samples_X_hat, n_features]
+#     differences = X[:, np.newaxis, :] - X_hat[np.newaxis, :, :]
     
-    # Square the differences and average over the feature axis (dim=2)
-    mse_matrix = np.mean(differences ** 2, axis=2)
+#     # Square the differences and average over the feature axis (dim=2)
+#     mse_matrix = np.mean(differences ** 2, axis=2)
     
-    # Return the overall mean of the MSE matrix
-    return np.mean(mse_matrix).item()
+#     # Return the overall mean of the MSE matrix
+#     return np.mean(mse_matrix).item()
 
 # Pytorch version
 # def all_pairs_mse(X, X_hat):
