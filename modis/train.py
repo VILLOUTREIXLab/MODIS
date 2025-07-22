@@ -333,8 +333,8 @@ def read_args():
 
 def train(
     config_file: str,
-    train_datasets: list[torch.utils.data.DataLoader],
-    val_datasets: list[torch.utils.data.DataLoader] | None = None,
+    train_datasets: list[torch.utils.data.Dataset],
+    val_datasets: list[torch.utils.data.Dataset] | None = None,
     show_dataset_summary: bool = True,
     run_evaluation: bool = True,
     generate_plots: bool = True

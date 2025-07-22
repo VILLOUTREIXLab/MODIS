@@ -134,7 +134,7 @@ class MODIS(nn.Module):
         self.variational_autoencoders = nn.ModuleList([
             VAE(
                 input_size = config.modalities[i].input_size,
-                encoder_ratios = [2, 1.0, 0.75, 0.5, 0.25] if not 'encoder_ratios' in config.modalities[i] else config.modalities[i].encoder_ratios,
+                encoder_ratios = [1.2, 1.0, 0.75, 0.5, 0.25] if not 'encoder_ratios' in config.modalities[i] else config.modalities[i].encoder_ratios,
                 latent_size = config.latent_size
             ).to(self.device) for i in range(self.num_modalities)
         ])
