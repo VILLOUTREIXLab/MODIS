@@ -1,9 +1,9 @@
 import sys
 
 import torch
-from omegaconf import OmegaConf, DictConfig
+import omegaconf
 
-def validate_config(config: DictConfig) -> None:
+def validate_config(config: omegaconf.DictConfig) -> None:
     """Validate a configuration"""
     error = None
     if config.training_mode not in ['semisupervised', 'supervised']:
@@ -18,8 +18,13 @@ def validate_config(config: DictConfig) -> None:
     if config.device == 'auto':
         config.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-def load_config(config_file: str) -> DictConfig:
+    if type(config.beta) == omegaconf.listconfig.ListConfig:
+        assert len(config.beta) == len(config.modalities), "The 'beta' parameter in the configuration must be a list whose length matches the number of modalities."
+    elif type(config.beta) != float:
+        raise TypeError("The 'beta' parameter in the configuration must be a float or a list.")
+
+def load_config(config_file: str) -> omegaconf.DictConfig:
     """Load a configuration from config file"""
-    config = OmegaConf.load(config_file)
+    config = omegaconf.OmegaConf.load(config_file)
     validate_config(config)
     return config

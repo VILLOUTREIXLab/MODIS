@@ -3,7 +3,7 @@ import time
 import pathlib
 
 import numpy as np
-from omegaconf import OmegaConf
+import omegaconf
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -71,7 +71,7 @@ class Trainer:
         checkpoint_data = {
             'epoch': epoch,
             'timestamp': timestamp,
-            'config': OmegaConf.to_container(config, resolve=True),
+            'config': omegaconf.OmegaConf.to_container(config, resolve=True),
             'model_state': self.model.state_dict(),
             'optimizer_state': self.optimizer.state_dict()
         }
@@ -266,24 +266,27 @@ class Trainer:
 
         # KL
         kl_loss_modal = [-0.5 * torch.sum(1 + logvar[i] - mu[i].pow(2) - logvar[i].exp()) for i in range(num_modalities)]
-        kl_loss = sum(kl_loss_modal)  # torch.stack(kl_loss_modal).mean(dim=0)
+        if type(self.config.beta) == omegaconf.listconfig.ListConfig:
+            # Apply modality specific beta hyperparam
+            kl_loss_modal = [self.config.beta[i] * kl for i, kl in enumerate(kl_loss_modal)]
+            kl_loss = sum(kl_loss_modal)
+        else:
+            kl_loss = self.config.beta * sum(kl_loss_modal)
 
+        # Discriminator adv
         if not self.use_relativistic_loss:
-            # Discriminator adv
             d_adv_loss = torch.tensor(0., device=device)
             for i in range(num_modalities):
                 for j in range(num_modalities):
                     if i == j: continue
                     d_adv_loss += self.ce_loss(d_adv[i], targets[j])
         else:
-            # # Discriminator adv
             # d_adv_loss = torch.tensor(0., device=device)
             # for j in range(num_modalities):
             #     real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
             #     real_means_sum = torch.sum(torch.stack(real_means), dim=0)
             #     d_adv_loss += torch.nn.functional.relu(1 - (d_adv[j] - real_means_sum)).mean()
 
-            # Discriminator adv
             relativistic_logits = torch.zeros_like(d_adv[0], device=device)
             for i in range(num_modalities):
                 for j in range(num_modalities):
@@ -367,7 +370,7 @@ def train(
 
         timestamp = checkpoint_data['timestamp']
         init_epoch = checkpoint_data['epoch']+1
-        config = OmegaConf.create(checkpoint_data['config'])
+        config = omegaconf.OmegaConf.create(checkpoint_data['config'])
 
     # Instantiate dataloaders
     train_dataloaders = get_dataloaders(train_datasets, batch_size=config.batch_size, drop_last=True, shuffle=True)
