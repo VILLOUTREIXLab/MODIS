@@ -129,11 +129,11 @@ def train_loop(
             f"d_aux_acc: {epoch_metrics['d_aux_acc']:.4f}"
             f" {val_acc_str}"
         )
-        writer.add_scalar('d_loss', epoch_metrics['d_loss'], epoch+1)
+        writer.add_scalar('recon_loss', epoch_metrics['recon_loss'], epoch+1)
         writer.add_scalar('d_aux_acc', epoch_metrics['d_aux_acc'], epoch+1)
-        writer.add_scalar('g_loss', epoch_metrics['g_loss'], epoch+1)
         if val_datasets is not None:
             writer.add_scalar('val_acc', epoch_metrics['val_acc'], epoch+1)
+        writer.add_scalar('g_loss', epoch_metrics['g_loss'], epoch+1)
 
         # Save best checkpoint
         if val_datasets is not None:
