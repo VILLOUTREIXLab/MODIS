@@ -22,7 +22,7 @@ x, y = list(zip(*[modis.utils.data.get_samples_from_dataloader(dataloader, num_s
 num_modalities = len(dataloaders)
 
 # Load checkpoint
-model = modis.model(config).cpu()
+model = modis.Model(config).cpu()
 model.load_from_checkpoint(checkpoint_file)
 
 # Predict

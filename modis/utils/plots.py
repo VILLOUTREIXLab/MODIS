@@ -13,10 +13,10 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
-from modis.model import MODIS
+from modis import Model
 from modis.utils.config import load_config
 from modis.utils.data import get_dataloaders, get_samples_from_dataloader
-from modis.utils.utils import calc_classification_metrics
+from modis.utils.evaluation import calc_classification_metrics
 
 
 def plot_training_log(
@@ -476,7 +476,6 @@ def plot_confusion_matrix(
     metrics = calc_classification_metrics(true_labels, pred_labels)
     matrics_text = f"""
     ACC: {metrics['acc']:.3f}
-    IFW-AAC: {metrics['inv-freq-w-acc']:.3f}
     B-AAC: {metrics['bacc']:.3f}
     JI: {metrics['ji']:.3f}
     NMI: {metrics['nmi']:.3f}
@@ -592,7 +591,7 @@ def checkpoint_report_plots(
         save_plot = True
     )
 
-    model = MODIS(config)
+    model = Model(config)
     model.load_from_checkpoint(checkpoint_file, verbose=False)
 
     dataloaders = get_dataloaders(datasets, batch_size=config.batch_size, drop_last=False, shuffle=True)

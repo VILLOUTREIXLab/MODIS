@@ -50,7 +50,7 @@ test_datasets = get_datasets(
 )
 
 config = load_config(config_file)
-model = modis.model(config)
+model = modis.Model(config)
 model.load_from_checkpoint(checkpoint_dir / "checkpoint_best.pth")
 
 test_dataloaders = get_dataloaders(test_datasets, batch_size=config.batch_size, drop_last=False, shuffle=False)

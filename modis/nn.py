@@ -119,10 +119,7 @@ class Discriminator(nn.Module):
 
         return class_pred
 
-class MODIS(nn.Module):
-    """
-    MODIS model class
-    """
+class Model(nn.Module):
 
     def __init__(self, config):
         super().__init__()

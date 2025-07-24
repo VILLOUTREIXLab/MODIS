@@ -1,3 +1,3 @@
 from .utils.config import load_config
-from .train import train, load_checkpoint, load_log
-from .model import MODIS as model
+from .nn import Model
+from .train import launch_training, load_checkpoint, load_log
