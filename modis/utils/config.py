@@ -25,9 +25,6 @@ def flatten_omegaconf(config, parent_key='') -> dict:
     return items
 
 def validate_config(config: DictConfig) -> None:
-    ##### missing: save_checkpoint, and use_relativistic_loss
-
-
     """Validate a configuration"""
     error = None
     
@@ -35,7 +32,8 @@ def validate_config(config: DictConfig) -> None:
     required_fields = [
         'dataset_name', 'model_name', 'latent_size', 'modalities', 
         'training_mode', 'batch_size', 'num_epochs', 'generators_lr', 
-        'discriminator_lr', 'beta', 'beta1', 'lambda_r', 'device'
+        'discriminator_lr', 'beta', 'beta1', 'lambda_r', 'device',
+        'save_checkpoint_latest', 'save_checkpoint_best'
     ]
     
     for field in required_fields:
@@ -106,19 +104,19 @@ def validate_config(config: DictConfig) -> None:
         elif config.num_classes <= 0:
             error = f'Invalid num_classes: {config.num_classes}. Must be positive integer.'
     
-    # Boolean fields validation (if present)
+    # Boolean fields validation
     if error is None:
-        boolean_fields = ['save_checkpoint', 'use_relativistic_loss']
+        boolean_fields = ['save_checkpoint_latest', 'save_checkpoint_best']
         for field in boolean_fields:
-            if field in config and not isinstance(config[field], bool):
+            if not isinstance(config[field], bool):
                 error = f'Invalid {field}: {config[field]}. Must be boolean (true/false).'
                 break
 
     if error is None:
         if type(config.beta) == ListConfig and len(config.beta) != len(config.modalities):
-            error = "The 'beta' parameter in the configuration must be a list whose length matches the number of modalities."
+            error = "Invalid beta parameter. The length of the list must match the number of modalities."
         elif type(config.beta) != float:
-            error = "The 'beta' parameter in the configuration must be a float or a list."
+            error = "Invalid beta parameter. Must be a float or a list."
     
     if error is not None:
         print(f'[-] Configuration error: {error}')
