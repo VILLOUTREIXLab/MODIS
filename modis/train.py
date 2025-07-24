@@ -1,4 +1,3 @@
-import json
 import time
 import argparse
 from pathlib import Path
@@ -12,23 +11,10 @@ from torch.utils.tensorboard import SummaryWriter
 from modis.training import Trainer
 from modis.utils.config import load_config
 from modis.utils.data import get_dataloaders, summarize_dataset
-from modis.utils.utils import adjust_time
+from modis.utils.display import adjust_time
 from modis.utils.evaluation import evaluate_model, launch_checkpoints_evaluation
 from modis.utils.plots import checkpoint_report_plots
-
-
-def load_checkpoint(checkpoint_file: Path) -> dict:
-    if not checkpoint_file.exists():
-        raise FileNotFoundError(f"Checkpoint file {checkpoint_file} doesn't exist.")
-    checkpoint = torch.load(checkpoint_file)
-    return checkpoint
-
-def load_log(checkpoint_file: Path) -> list:
-    if not checkpoint_file.exists():
-        raise FileNotFoundError(f"Log file {checkpoint_file} doesn't exist.")
-    with open(checkpoint_file, 'r', encoding='utf-8') as file:
-        log = json.load(file)
-    return log
+from modis.utils.io import load_checkpoint, load_log
 
 def read_args():
     parser = argparse.ArgumentParser(description="MODIS Training Configuration")

@@ -142,3 +142,31 @@ def launch_checkpoints_evaluation(
             json.dump(metrics_data, json_file, indent=4, ensure_ascii=False)
     except IOError as e:
         print(f"Error saving evaluation metrics file: {e}")
+
+## This is counting both directions of the pais, not unique pairs, fix
+## includes self-comparisons?
+# def all_pairs_mse(X: np.ndarray, X_hat: np.ndarray):
+#     """
+#     Calculates the mean squared error (MSE) for all pairs of samples between X and X_hat
+
+#     Args:
+#         X (np.ndarray): First input array of shape [n_samples_X, n_features]
+#         X_hat (np.ndarray): Second input array of shape [n_samples_X_hat, n_features]
+
+#     Returns:
+#         float: The overall mean of the MSE matrix
+#     """
+#     # Broadcast to [n_samples_X, n_samples_X_hat, n_features]
+#     differences = X[:, np.newaxis, :] - X_hat[np.newaxis, :, :]
+    
+#     # Square the differences and average over the feature axis (dim=2)
+#     mse_matrix = np.mean(differences ** 2, axis=2)
+    
+#     # Return the overall mean of the MSE matrix
+#     return np.mean(mse_matrix).item()
+
+# Pytorch version
+# def all_pairs_mse(X, X_hat):
+#     differences = X[:, None, :] - X_hat[None, :, :]  # Broadcast to [n_samples_X, n_samples_X_hat, n_features]
+#     mse_matrix = torch.mean(differences ** 2, dim=2)  # Averaging over the feature axis (dim=2)
+#     return mse_matrix.mean().item()
