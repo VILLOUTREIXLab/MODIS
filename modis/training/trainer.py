@@ -292,7 +292,7 @@ class Trainer:
         else:
             d_loss = d_adv_loss + d_aux_loss + d_cluster_loss
 
-        g_loss = recon_loss + (self.config.beta * kl_loss) + d_loss
+        g_loss = recon_loss + kl_loss + d_loss
 
         # Backpropagation
         self.optimizer.zero_grad()
