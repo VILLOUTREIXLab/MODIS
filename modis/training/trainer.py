@@ -67,7 +67,7 @@ class Trainer:
 
         torch.save(checkpoint_data, checkpoint_file)
 
-        # Save config
+        # Save config - It will be rewriten by best and latest checkpoints
         OmegaConf.save(config, checkpoint_dir / 'config.yaml')
 
         # Save log

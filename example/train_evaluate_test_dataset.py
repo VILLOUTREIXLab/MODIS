@@ -1,13 +1,14 @@
 import torch
 import modis
 from modis.utils.data import PartiallyLabeledDataset, get_dataloaders
-from modis.utils.config import load_config
-from modis.utils.utils import evaluate_model
+from modis.utils.io import load_config
+from modis.utils.evaluation import evaluate_model
 from torch.utils.data import random_split
 
 from src.generate_dataset import get_datasets
 
 random_seed = 1234
+config_file = 'config/semisupervised.yaml'
 
 # Load the dataset
 train_datasets = get_datasets(
@@ -26,11 +27,10 @@ train_datasets, val_datasets = list(zip(*[random_split(
 ) for train_dataset in train_datasets]))
 
 # Generate artificially a partially labeled dataset
-train_datasets = [PartiallyLabeledDataset(dataset, labeled_ratio=0.2, random_seed=random_seed)
+train_datasets = [PartiallyLabeledDataset(dataset, labeled_ratio=0.05, random_seed=random_seed)
                   for dataset in train_datasets]
 
 # Train model
-config_file = 'config/semisupervised.yaml'
 checkpoint_dir = modis.train(
     config_file=config_file,
     train_datasets=train_datasets,
