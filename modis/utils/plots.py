@@ -14,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import ConfusionMatrixDisplay, confusion_matrix
 
 from modis import Model
-from modis.utils.config import load_config
+from modis.utils.io import load_config
 from modis.utils.data import get_dataloaders, get_samples_from_dataloader
 from modis.utils.evaluation import calc_classification_metrics
 

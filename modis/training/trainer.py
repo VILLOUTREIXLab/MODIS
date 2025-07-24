@@ -51,7 +51,6 @@ class Trainer:
         checkpoint_data = {
             'epoch': epoch,
             'timestamp': timestamp,
-            'config': OmegaConf.to_container(config, resolve=True),
             'model_state': self.model.state_dict(),
             'optimizer_state': self.optimizer.state_dict()
         }
@@ -68,6 +67,10 @@ class Trainer:
 
         torch.save(checkpoint_data, checkpoint_file)
 
+        # Save config
+        OmegaConf.save(config, checkpoint_dir / 'config.yaml')
+
+        # Save log
         with open(log_file, 'w', encoding='utf-8') as f:
             json.dump(log, f, ensure_ascii=False, indent=4)
 

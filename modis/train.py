@@ -9,7 +9,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from modis.training import Trainer
-from modis.utils.config import load_config
+from modis.utils.io import load_config
 from modis.utils.data import get_dataloaders, summarize_dataset
 from modis.utils.display import adjust_time
 from modis.utils.evaluation import evaluate_model, launch_checkpoints_evaluation
@@ -22,7 +22,7 @@ def read_args():
     args = parser.parse_args()
     return args
 
-def train(
+def train_loop(
     config_file: str,
     train_datasets: list[torch.utils.data.Dataset],
     val_datasets: list[torch.utils.data.Dataset] | None = None,
@@ -176,7 +176,7 @@ def train(
 
     return checkpoint_dir
 
-def launch_training(
+def train(
     config_file: str,
     train_datasets: list[torch.utils.data.Dataset],
     val_datasets: list[torch.utils.data.Dataset] | None = None,
@@ -185,7 +185,7 @@ def launch_training(
     generate_plots: bool = True
 ) -> Path | None:
     # Train model
-    checkpoint_dir = train(
+    checkpoint_dir = train_loop(
         config_file=config_file,
         train_datasets=train_datasets,
         val_datasets=val_datasets,
@@ -205,41 +205,46 @@ def launch_training(
         )
 
     if generate_plots:
-        checkpoint_report_plots(
-            checkpoint_dir = checkpoint_dir,
-            config_file = config_file,
-            datasets = train_datasets,
-            is_train = True,
-            use_best = False,
-            num_samples = None
-        )
-
-        checkpoint_report_plots(
-            checkpoint_dir = checkpoint_dir,
-            config_file = config_file,
-            datasets = train_datasets,
-            is_train = True,
-            use_best = True,
-            num_samples = None
-        )
-
-        if val_datasets is not None:
+        config = load_config(config_file)
+        if config.save_checkpoint_latest:
             checkpoint_report_plots(
                 checkpoint_dir = checkpoint_dir,
                 config_file = config_file,
-                datasets = val_datasets,
-                is_train = False,
+                datasets = train_datasets,
+                is_train = True,
                 use_best = False,
                 num_samples = None
             )
 
+        if config.save_checkpoint_best:
             checkpoint_report_plots(
                 checkpoint_dir = checkpoint_dir,
                 config_file = config_file,
-                datasets = val_datasets,
-                is_train = False,
+                datasets = train_datasets,
+                is_train = True,
                 use_best = True,
                 num_samples = None
             )
+
+        if val_datasets is not None:
+            if config.save_checkpoint_latest:
+                checkpoint_report_plots(
+                    checkpoint_dir = checkpoint_dir,
+                    config_file = config_file,
+                    datasets = val_datasets,
+                    is_train = False,
+                    use_best = False,
+                    num_samples = None
+                )
+
+            if config.save_checkpoint_best:
+                checkpoint_report_plots(
+                    checkpoint_dir = checkpoint_dir,
+                    config_file = config_file,
+                    datasets = val_datasets,
+                    is_train = False,
+                    use_best = True,
+                    num_samples = None
+                )
 
     return checkpoint_dir

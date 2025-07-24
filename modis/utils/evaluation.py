@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.metrics import confusion_matrix, jaccard_score, f1_score, normalized_mutual_info_score, balanced_accuracy_score #, accuracy_score
 from sklearn.metrics.cluster import adjusted_rand_score
 
-from modis.utils.config import load_config
+from modis.utils.io import load_config
 from modis.utils.data import get_dataloaders
 
 def accuracy(logits, target):
@@ -114,7 +114,7 @@ def evaluate_checkpoint(
             print(f"{metric_name}: {metric_value:.4f}")
 
 def launch_checkpoints_evaluation(
-    config_file,  ## should read from checkpoint dir
+    config_file,
     train_datasets,
     val_datasets,
     checkpoint_dir: Path,

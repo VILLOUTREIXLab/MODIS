@@ -2,7 +2,9 @@ import json
 from pathlib import Path
 
 import torch
+from omegaconf import DictConfig, OmegaConf
 
+from modis.utils.config import validate_config
 
 def load_checkpoint(checkpoint_file: Path) -> dict:
     if not checkpoint_file.exists():
@@ -17,3 +19,8 @@ def load_log(checkpoint_file: Path) -> list:
         log = json.load(file)
     return log
 
+def load_config(config_file: str) -> DictConfig:
+    """Load a configuration from config file"""
+    config = OmegaConf.load(config_file)
+    validate_config(config)
+    return config

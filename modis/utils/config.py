@@ -154,6 +154,8 @@ def generate_grid(base_config_file: pathlib.Path, params: dict):
         FileNotFoundError: If base config file doesn't exist
         ValueError: If parameters are not provided or the config file fails to load
     """
+    from modis.utils.io import load_config
+
     if not base_config_file.exists():
         raise FileNotFoundError(f"Base config file not found: {base_config_file}")
     
@@ -182,9 +184,3 @@ def generate_grid(base_config_file: pathlib.Path, params: dict):
         grid.append(new_config)
 
     return grid
-
-def load_config(config_file: str) -> DictConfig:
-    """Load a configuration from config file"""
-    config = OmegaConf.load(config_file)
-    validate_config(config)
-    return config
