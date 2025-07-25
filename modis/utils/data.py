@@ -183,3 +183,80 @@ def get_samples_from_dataloader(
     labels = torch.cat(labels, dim=0)[:num_samples]
 
     return samples, labels
+
+def random_split(
+        dataset: Dataset | list[Dataset], 
+        length_ratios: list[float],
+        paired: bool,
+        random_seed: int | None = None
+) -> list:
+    """
+    Randomly split a dataset or multi-modal dataset
+    
+    Args:
+        dataset: Single Dataset or list of Datasets
+        length_ratios: List of ratios for each split (should sum to 1.0)
+        random_seed: Random seed for reproducibility
+        paired: If True, ensures corresponding samples across datasets stay together
+    
+    Returns:
+        List of splits, where each split contains Dataset(s) in the same format as input
+    """
+    # Handle single dataset case
+    if isinstance(dataset, Dataset):
+        return torch.utils.data.random_split(
+            dataset=dataset,
+            lengths=length_ratios,
+            generator=torch.Generator().manual_seed(random_seed) if random_seed is not None else None
+        )
+    
+    # Multi-modal dataset case
+    if not dataset:
+        raise ValueError("Dataset list cannot be empty")
+    
+    # Verify all datasets have the same length for paired datasets
+    dataset_length = len(dataset[0])
+    if paired and not all(len(ds) == dataset_length for ds in dataset):
+        raise ValueError("All datasets must have the same length for paired splitting")
+    
+    if not paired:
+        # Split each dataset independently
+        splits = list(zip(*[torch.utils.data.random_split(
+            dataset=ds,
+            lengths=length_ratios,
+            generator=torch.Generator().manual_seed(random_seed) if random_seed is not None else None
+        ) for ds in dataset]))
+        return splits
+    
+    # Paired dataset splitting - generate indices once and apply to all datasets
+    generator = torch.Generator().manual_seed(random_seed) if random_seed is not None else None
+    indices = torch.randperm(dataset_length, generator=generator).tolist()
+    
+    # Convert ratios to actual lengths
+
+    if abs(sum(length_ratios) - 1.0) > 1e-6:
+        raise ValueError(f"Length ratios must sum to 1.0, got {sum(length_ratios)}")
+    
+    lengths = []
+    remaining = dataset_length
+    for ratio in length_ratios[:-1]:
+        length = int(ratio * dataset_length)
+        lengths.append(length)
+        remaining -= length
+    lengths.append(remaining)  # Last split gets remaining samples
+    
+    # Create index splits
+    splits_indices = []
+    start_idx = 0
+    for length in lengths:
+        end_idx = start_idx + length
+        splits_indices.append(indices[start_idx:end_idx])
+        start_idx = end_idx
+    
+    # Create Subset datasets for each split and each modality
+    splits = []
+    for split_indices in splits_indices:
+        split_datasets = [Subset(ds, split_indices) for ds in dataset]
+        splits.append(split_datasets)
+    
+    return splits
