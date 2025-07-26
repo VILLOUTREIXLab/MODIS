@@ -717,6 +717,7 @@ def calc_reconstruction_and_translation_mse(
     model,
     save_plot: bool = False,
     save_dir: pathlib.Path = pathlib.Path('.'),
+    suffix: str | None = None,
     text_size: int = 30,
     vmin: float = 0,
     vmax: float = 0.1
@@ -759,7 +760,7 @@ def calc_reconstruction_and_translation_mse(
     cbar.ax.tick_params(labelsize=text_size)
 
     if save_plot:
-        figure_file = save_dir / "reconstruction_translation_mse_matrix.svg"
+        figure_file = save_dir / f"reconstruction_translation_mse_matrix{suffix if suffix is not None else ''}.svg"
         plt.savefig(figure_file, format='svg', bbox_inches='tight')
         plt.close()
     else:
