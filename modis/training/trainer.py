@@ -129,11 +129,6 @@ class Trainer:
 
         d_adv, d_aux, d_hidden = self.model(x, discriminator_only=True)
 
-        # # Calculate mean outputs for relativistic loss
-        # d_adv_means = []
-        # for i in range(num_modalities):
-        #     d_adv_means.append(d_adv[i].mean())
-
         # Losses
 
         if not self.use_relativistic_loss:
@@ -141,26 +136,6 @@ class Trainer:
             for i in range(num_modalities):
                 d_adv_loss += self.ce_loss(d_adv[i], targets[i])
         else:
-            # # Relativistic GAN Loss (RpGAN)
-            # d_adv_loss = torch.tensor(0., device=device)
-            # for i in range(num_modalities):
-            #     fake_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != i]
-            #     fake_means_sum = torch.sum(torch.stack(fake_means), dim=0)  # averaging instead of adding the means doesn't work
-            #     # fake_means_sum = torch.mean(torch.stack(fake_means), dim=0)  ## average instead?
-            #     real_loss = torch.nn.functional.relu(1 - (d_adv[i] - fake_means_sum)).mean()
-
-            #     fake_loss = torch.tensor(0., device=device)
-            #     for j in range(num_modalities):
-            #         if i == j: continue
-            #         # real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
-            #         # real_means_sum = torch.sum(torch.stack(real_means), dim=0)
-            #         # fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - real_means_sum)).mean()
-
-            #         # Other approach
-            #         fake_loss += torch.nn.functional.relu(1 + (d_adv[j] - d_adv_means[i])).mean()
-
-            #     d_adv_loss += real_loss - fake_loss
-
             # Relativistic loss
             relativistic_logits = torch.zeros_like(d_adv[0], device=device)
             for i in range(num_modalities):
@@ -187,7 +162,6 @@ class Trainer:
             d_cluster_loss += self.cluster_loss(d_adv[i], d_aux[i], d_hidden[i])
 
         d_train_loss = d_adv_loss + d_aux_loss + d_cluster_loss
-        # d_total_loss = d_train_loss
 
         if torch.isnan(d_train_loss) == True:
             print("[-] Nan values found, aborting training")
@@ -220,11 +194,6 @@ class Trainer:
 
         recon_x, mu, logvar, d_adv, d_aux, d_hidden = self.model(x, discriminator_only=False)
 
-        # # Calculate mean outputs for relativistic loss
-        # d_adv_means = []
-        # for i in range(num_modalities):
-        #     d_adv_means.append(d_adv[i].mean())
-
         # Modality pred accuracy
         d_adv_modal_acc = [accuracy(d_adv[i], targets[i]) for i in range(num_modalities)]
         d_adv_acc = sum(d_adv_modal_acc) / num_modalities
@@ -245,7 +214,7 @@ class Trainer:
 
         # Reconstruction
         recon_losses_modal = [self.mse_loss(recon_x[i], x[i]) for i in range(num_modalities)]
-        recon_loss = sum(recon_losses_modal)  # torch.stack(recon_losses_modal).mean(dim=0)
+        recon_loss = sum(recon_losses_modal)
 
         # KL
         kl_loss_modal = [-0.5 * torch.sum(1 + logvar[i] - mu[i].pow(2) - logvar[i].exp()) for i in range(num_modalities)]
@@ -264,12 +233,6 @@ class Trainer:
                     if i == j: continue
                     d_adv_loss += self.ce_loss(d_adv[i], targets[j])
         else:
-            # d_adv_loss = torch.tensor(0., device=device)
-            # for j in range(num_modalities):
-            #     real_means = [adv_mean for idx, adv_mean in enumerate(d_adv_means) if idx != j]  ### every not j is real or just i?
-            #     real_means_sum = torch.sum(torch.stack(real_means), dim=0)
-            #     d_adv_loss += torch.nn.functional.relu(1 - (d_adv[j] - real_means_sum)).mean()
-
             relativistic_logits = torch.zeros_like(d_adv[0], device=device)
             for i in range(num_modalities):
                 for j in range(num_modalities):
