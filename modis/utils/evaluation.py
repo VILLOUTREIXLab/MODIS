@@ -114,14 +114,13 @@ def evaluate_checkpoint(
             print(f"{metric_name}: {metric_value:.4f}")
 
 def launch_checkpoints_evaluation(
-    config_file,
     train_datasets,
     val_datasets,
     checkpoint_dir: Path,
 ) -> None:
     metrics_data = {'latest': dict(), 'best': dict()}
 
-    config = load_config(config_file)
+    config = load_config(checkpoint_dir / 'config.yaml')
     if not config.save_checkpoint_latest and not config.save_checkpoint_best:
         return
 

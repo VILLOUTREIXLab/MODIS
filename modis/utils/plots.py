@@ -565,14 +565,13 @@ def plot_confusion_matrix(
 
 def checkpoint_report_plots(
     checkpoint_dir: pathlib.Path,
-    config_file: pathlib.Path,
     datasets: list[torch.utils.data.Dataset],
     is_train: bool,
     use_best: bool = True,
     num_samples: int | None = None
 ) -> None:
     """Save checkpoint log, 2D pca, and confusion matrices"""
-    config = load_config(config_file)
+    config = load_config(checkpoint_dir / 'config.yaml')
     checkpoint_file = checkpoint_dir / f"{'checkpoint_best.pth' if use_best else 'checkpoint_latest.pth'}"
     num_modalities = len(config.modalities)
     modality_names = [m.name for m in config.modalities]

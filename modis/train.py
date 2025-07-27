@@ -3,7 +3,7 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-import omegaconf
+from omegaconf import OmegaConf, DictConfig
 
 import torch
 # from torch.utils.tensorboard import SummaryWriter
@@ -23,12 +23,11 @@ def read_args():
     return args
 
 def train_loop(
-    config_file: str,
+    config: DictConfig,
     train_datasets: list[torch.utils.data.Dataset],
     val_datasets: list[torch.utils.data.Dataset] | None = None,
     show_dataset_summary: bool = True
 ) -> Path | None:
-    config = load_config(config_file)
     args = read_args()
 
     # Variables
@@ -50,7 +49,7 @@ def train_loop(
         init_epoch = checkpoint_data['epoch']+1
 
         config_file = args.checkpoint.parent / 'config.yaml'
-        config = omegaconf.OmegaConf.load(config_file)
+        config = OmegaConf.load(config_file)
 
     # Instantiate dataloaders
     train_dataloaders = get_dataloaders(train_datasets, batch_size=config.batch_size, drop_last=True, shuffle=True)
@@ -179,7 +178,7 @@ def train_loop(
     return checkpoint_dir
 
 def train(
-    config_file: str,
+    config: DictConfig,
     train_datasets: list[torch.utils.data.Dataset],
     val_datasets: list[torch.utils.data.Dataset] | None = None,
     show_dataset_summary: bool = True,
@@ -188,7 +187,7 @@ def train(
 ) -> Path | None:
     # Train model
     checkpoint_dir = train_loop(
-        config_file=config_file,
+        config=config,
         train_datasets=train_datasets,
         val_datasets=val_datasets,
         show_dataset_summary=show_dataset_summary
@@ -200,18 +199,17 @@ def train(
     if run_evaluation:
         print()
         launch_checkpoints_evaluation(
-            config_file=config_file,
             train_datasets=train_datasets,
             val_datasets=val_datasets,
             checkpoint_dir=checkpoint_dir
         )
 
     if generate_plots:
-        config = load_config(config_file)
+        config = load_config(checkpoint_dir / 'config.yaml')
+
         if config.save_checkpoint_latest:
             checkpoint_report_plots(
                 checkpoint_dir = checkpoint_dir,
-                config_file = config_file,
                 datasets = train_datasets,
                 is_train = True,
                 use_best = False,
@@ -221,7 +219,6 @@ def train(
         if config.save_checkpoint_best:
             checkpoint_report_plots(
                 checkpoint_dir = checkpoint_dir,
-                config_file = config_file,
                 datasets = train_datasets,
                 is_train = True,
                 use_best = True,
@@ -232,7 +229,6 @@ def train(
             if config.save_checkpoint_latest:
                 checkpoint_report_plots(
                     checkpoint_dir = checkpoint_dir,
-                    config_file = config_file,
                     datasets = val_datasets,
                     is_train = False,
                     use_best = False,
@@ -242,7 +238,6 @@ def train(
             if config.save_checkpoint_best:
                 checkpoint_report_plots(
                     checkpoint_dir = checkpoint_dir,
-                    config_file = config_file,
                     datasets = val_datasets,
                     is_train = False,
                     use_best = True,
