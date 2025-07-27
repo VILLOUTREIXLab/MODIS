@@ -11,29 +11,41 @@ class PartiallyLabeledDataset(Dataset):
     def __init__(
         self,
         dataset,
-        labeled_ratio: float = None,
+        labeled_samples_ratio: float = None,
         labeled_samples: int = None,
-        class_samples: int | list[int|None] = None,
-        class_samples_ratio: float | list[float|None] = None,
+        labeled_class_samples: int | list[int|None] = None,
+        labeled_class_samples_ratio: float | list[float|None] = None,
         num_random_samples: int = None,
         remove_unlabeled: bool| list[int] = False,
         random_seed: int | None = None
     ) -> None:
         """
-        Specify the amount of samples that keep their labels (the rest of the labels are turned to -1)
+        Adjust the number of samples that retain their labels (remaining
+        labels are set to -1).
 
         Args:
-            labeled_ratio: Set a ratio of random labeled to unlabeled samples (from 0 to 1) (randomly distributed among classes)
-            labeled_samples: Number of random labeled vs unlabeled samples (randomly distributed among classes)
-            class_samples: Fixed number of random labeled vs unlabeled samples per class if integer,
-                           if list (of the same length as the number of classes in the dataset)
-                           specify the number of random labeled samples per class
-            class_samples_ratio: Same as class_samples but for a ratio of labeled samples (from 0 to 1)
-
-            num_random_samples: This dataset will have a subset of the given dataset with this number of samples,
-                                the previous parameter are applied to these samples instead of the complete dataset 
-            remove_unlabeled: If True, unlabeled samples are removed, if list, unlabeled samples from the classes in this list are removed
-            random_seed: For reproducibility
+            labeled_samples_ratio (float): 
+                Ratio (0–1) of labeled samples randomly distributed across
+                classes relative to unlabeled samples in the dataset.
+            labeled_samples (int):
+                Number of samples to retain labels, randomly distributed
+                across classes.
+            labeled_class_samples (int | list):
+                Fixed number of labeled samples per class. If an integer,
+                applies to all classes; if a list (matching the number of
+                classes), specifies labeled samples per class.
+            labeled_class_samples_ratio (float | list):
+                Same as labeled_class_samples, but specifies the ratio (0 to 1)
+                of labeled samples per class.
+            num_random_samples (int):
+                Generate a subset with this number of samples; previous 
+                parameters apply to this subset.
+            remove_unlabeled (bool): 
+                If True, all unlabeled samples are removed; if a list,
+                unlabeled samples from the specified classes are removed.
+            random_seed (int):
+                Integer seed to ensure reproducible random operations
+                across runs.
         """
         if random_seed is not None:
             rng = np.random.default_rng(seed=random_seed)
@@ -44,22 +56,22 @@ class PartiallyLabeledDataset(Dataset):
         self.dataset = dataset
 
         if num_random_samples is not None:
-            assert num_random_samples <= len(dataset), f"dataset only has {len(dataset)} samples"
+            assert num_random_samples <= len(dataset), f"Dataset only has {len(dataset)} samples"
             random_dataset = rng.choice(range(len(self.dataset)), size=num_random_samples, replace=False)  ### requires seed??
             self.dataset = Subset(dataset, random_dataset)
 
         total_samples = len(self.dataset)
         all_indices = rng.permutation(total_samples)
 
-        if labeled_ratio is not None:
-            num_labeled = int(total_samples * labeled_ratio)
+        if labeled_samples_ratio is not None:
+            num_labeled = int(total_samples * labeled_samples_ratio)
             self.labeled_indices = set(all_indices[:num_labeled])
 
         elif labeled_samples is not None:
             self.labeled_indices = set(all_indices[:labeled_samples])
 
-        elif class_samples is not None or class_samples_ratio is not None:
-            class_indices = dict() # index of samples per class
+        elif labeled_class_samples is not None or labeled_class_samples_ratio is not None:
+            class_indices = dict()  # Index of samples per class
             for i, (_, label) in enumerate(self.dataset):
                 if not label in class_indices:
                     class_indices[label] = []
@@ -67,16 +79,16 @@ class PartiallyLabeledDataset(Dataset):
 
             self.labeled_indices = []
             for label in class_indices:
-                if class_samples is not None:
-                    if type(class_samples) == list:
-                        num_labeled = class_samples[label] if class_samples[label] is not None else len(class_indices[label])
+                if labeled_class_samples is not None:
+                    if type(labeled_class_samples) == list:
+                        num_labeled = labeled_class_samples[label] if labeled_class_samples[label] is not None else len(class_indices[label])
                     else:
-                        num_labeled = class_samples
+                        num_labeled = labeled_class_samples
                 else:
-                    if type(class_samples_ratio) == list:
-                        num_labeled = int(len(class_indices[label]) * class_samples_ratio[label]) if class_samples_ratio[label] is not None else len(class_indices[label])
+                    if type(labeled_class_samples_ratio) == list:
+                        num_labeled = int(len(class_indices[label]) * labeled_class_samples_ratio[label]) if labeled_class_samples_ratio[label] is not None else len(class_indices[label])
                     else:
-                        num_labeled = int(len(class_indices[label]) * class_samples_ratio)
+                        num_labeled = int(len(class_indices[label]) * labeled_class_samples_ratio)
                 self.labeled_indices.extend(random.sample(class_indices[label], num_labeled))
         else:
             self.labeled_indices = set(all_indices)
