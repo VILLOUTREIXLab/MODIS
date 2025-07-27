@@ -48,7 +48,9 @@ def train_loop(
 
         timestamp = checkpoint_data['timestamp']
         init_epoch = checkpoint_data['epoch']+1
-        config = omegaconf.OmegaConf.create(checkpoint_data['config'])
+
+        config_file = args.checkpoint.parent / 'config.yaml'
+        config = omegaconf.OmegaConf.load(config_file)
 
     # Instantiate dataloaders
     train_dataloaders = get_dataloaders(train_datasets, batch_size=config.batch_size, drop_last=True, shuffle=True)
