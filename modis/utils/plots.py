@@ -238,7 +238,9 @@ def plot_2d_projection(
     is_best: bool | None = None,
     save_plot: bool = False,
     figsize: tuple = (8, 8),
-    text_size: int = 20
+    text_size: int = 20,
+    alt_save_dir: pathlib.Path = None,
+    alt_filename: str = None
 ) -> None:
     """
     Display and save a 2D PCA or UMAP plot
@@ -315,11 +317,21 @@ def plot_2d_projection(
         plt.legend(loc='upper right', bbox_to_anchor=(1.4, 1), fontsize=text_size)  # bbox_to_anchor=(1.6, 1)
 
     if save_plot:
-        split_name = 'train' if is_train else 'val'
-        if is_best:
-            figure_file = checkpoint_dir / split_name / f"{technique}_2d_checkpoint_best.svg"
+        if alt_save_dir is not None:
+            if alt_filename is not None:
+                filename = f"{alt_filename}.svg"
+            else:
+                if is_best:
+                    filename = f"{technique}_2d_checkpoint_best.svg"
+                else:
+                    filename = f"{technique}_2d_checkpoint_latest.svg"
+            figure_file = alt_save_dir / filename
         else:
-            figure_file = checkpoint_dir / split_name / f"{technique}_2d_checkpoint_latest.svg"
+            split_name = 'train' if is_train else 'val'
+            if is_best:
+                figure_file = checkpoint_dir / split_name / f"{technique}_2d_checkpoint_best.svg"
+            else:
+                figure_file = checkpoint_dir / split_name / f"{technique}_2d_checkpoint_latest.svg"
         figure_file.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(figure_file, format='svg', bbox_inches='tight')
         plt.close()
@@ -453,7 +465,8 @@ def plot_confusion_matrix(
     save_plot: bool = False,
     figsize = (16, 8),
     text_size = 20,
-    filename_suffix: str | None = None
+    filename_suffix: str | None = None,
+    alt_save_dir: pathlib.Path = None
 ) -> None:
     """
     Display a confusion matrix.
@@ -548,15 +561,22 @@ def plot_confusion_matrix(
         plt.tight_layout()
 
     if save_plot:
-        split_name = 'train' if is_train else 'val'
+        if alt_save_dir is not None:
+            save_dir = alt_save_dir
+        else:
+            split_name = 'train' if is_train else 'val'
+            save_dir = checkpoint_dir / split_name 
+        
         if filename_suffix is None:
             suffix = ''
         else:
             suffix = f"_{filename_suffix}"
+        
         if is_best:
-            figure_file = checkpoint_dir / split_name / f"confusion_matrix_checkpoint_best{suffix}.svg"
+            figure_file = save_dir / f"confusion_matrix_checkpoint_best{suffix}.svg"
         else:
-            figure_file = checkpoint_dir / split_name / f"confusion_matrix_checkpoint_latest{suffix}.svg"
+            figure_file = save_dir / f"confusion_matrix_checkpoint_latest{suffix}.svg"
+        
         figure_file.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(figure_file, format = 'svg', bbox_inches = 'tight')  ### dpi=300
         plt.close()
@@ -743,7 +763,7 @@ def calc_reconstruction_and_translation_mse(
             mse_matrix[ii, it] = np.mean((translations[ii][it] - x[it].cpu().numpy())**2)
 
     plt.figure(figsize=(8, 7))
-    ax = sns.heatmap(mse_matrix, annot=True, fmt=".4f", cmap="coolwarm", linewidths=0.5, cbar=True, annot_kws={"size": text_size}, vmin=vmin, vmax=vmax)
+    ax = sns.heatmap(mse_matrix, annot=True, fmt=".3f", cmap="coolwarm", linewidths=0.5, cbar=True, annot_kws={"size": text_size}, vmin=vmin, vmax=vmax)
 
     plt.xlabel("output modality", fontsize=text_size)
     plt.ylabel("input modality", fontsize=text_size)
