@@ -6,7 +6,7 @@ import numpy as np
 import omegaconf
 
 import torch
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 from modis.training import Trainer
 from modis.utils.io import load_config
@@ -34,7 +34,7 @@ def train_loop(
     # Variables
     log = []
     save_path = Path("./saved")
-    log_path = Path("./saved/log")
+    # log_path = Path("./saved/log")
     device = config.device
     timestamp = time.strftime('%Y%m%d_%H%M%S')
     init_epoch = 0
@@ -71,7 +71,7 @@ def train_loop(
 
     trainer = Trainer(config)
 
-    writer = SummaryWriter(log_dir=f"{log_path}/{timestamp}")
+    # writer = SummaryWriter(log_dir=f"{log_path}/{timestamp}")
 
     if init_epoch > 0:
         trainer.load_model_and_optimizer_states(checkpoint_data)
@@ -131,11 +131,11 @@ def train_loop(
             f"d_aux_acc: {epoch_metrics['d_aux_acc']:.4f}"
             f" {val_acc_str}"
         )
-        writer.add_scalar(f"{config.model_name}/Loss/recon_loss" , epoch_metrics['recon_loss'], epoch+1)
-        writer.add_scalar(f"{config.model_name}/Loss/g_loss", epoch_metrics['g_loss'], epoch+1)
-        writer.add_scalar(f"{config.model_name}/Accuracy/d_aux_acc", epoch_metrics['d_aux_acc'], epoch+1)
-        if val_datasets is not None:
-            writer.add_scalar(f"{config.model_name}/Accuracy/val_acc", epoch_metrics['val_acc'], epoch+1)
+        # writer.add_scalar(f"{config.model_name}/Loss/recon_loss" , epoch_metrics['recon_loss'], epoch+1)
+        # writer.add_scalar(f"{config.model_name}/Loss/g_loss", epoch_metrics['g_loss'], epoch+1)
+        # writer.add_scalar(f"{config.model_name}/Accuracy/d_aux_acc", epoch_metrics['d_aux_acc'], epoch+1)
+        # if val_datasets is not None:
+        #     writer.add_scalar(f"{config.model_name}/Accuracy/val_acc", epoch_metrics['val_acc'], epoch+1)
 
         # Save best checkpoint
         if val_datasets is not None:
@@ -157,7 +157,7 @@ def train_loop(
                 verbose=False
             )
 
-    writer.close()
+    # writer.close()
 
     print(f"Trained {epoch-init_epoch+1} epochs in {adjust_time(time.time() - start_time)}")
     print("==> Training finished!")
