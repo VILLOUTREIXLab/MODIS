@@ -489,7 +489,7 @@ def plot_confusion_matrix(
     metrics = calc_classification_metrics(true_labels, pred_labels)
     matrics_text = f"""
     ACC: {metrics['acc']:.3f}
-    B-AAC: {metrics['bacc']:.3f}
+    B-ACC: {metrics['bacc']:.3f}
     JI: {metrics['ji']:.3f}
     NMI: {metrics['nmi']:.3f}
     F1: {metrics['f1']:.3f}
