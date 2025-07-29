@@ -48,9 +48,10 @@ def evaluate_model(model, dataloaders) -> dict:
     model.eval()
     pred_y = []
     true_y = []
-    recon_loss = []
+    recon_loss = dict()
     with torch.no_grad():
         for idx, dl in enumerate(dataloaders):
+            recon_loss[idx] = []
             for data in dl:
                 x, y = data[0].to(device), data[1].to(device)
 
@@ -72,7 +73,7 @@ def evaluate_model(model, dataloaders) -> dict:
                 # Reconstruction
                 latents = model.get_latents(x, input_modality=idx)
                 reconstruction = model.variational_autoencoders[idx].decode(latents)
-                recon_loss.append(mse_loss(reconstruction, x).cpu())
+                recon_loss[idx].append(mse_loss(reconstruction, x).cpu())
 
     if not true_y:
         return dict()
@@ -81,7 +82,12 @@ def evaluate_model(model, dataloaders) -> dict:
     pred_y = torch.cat(pred_y, dim=0).tolist()
     metrics = calc_classification_metrics(true_labels=true_y, pred_labels=pred_y)
 
-    recon_loss = torch.stack(recon_loss).mean().item()
+    modal_mse = []
+    for i in range(len(recon_loss)):
+        modal_mse.append(torch.stack(recon_loss[i]).mean().item())
+    recon_loss = torch.stack([batch_mse for i in recon_loss for batch_mse in recon_loss[i]]).mean().item()
+    
+    metrics['modal_mse'] = modal_mse
     metrics['mse'] = recon_loss
 
     return metrics
@@ -104,14 +110,20 @@ def evaluate_checkpoint(
     metrics = evaluate_model(model, train_dataloaders)
     metrics_data[checkpoint_opt]['train'] = metrics
     for metric_name, metric_value in metrics.items():
-        print(f"{metric_name}: {metric_value:.4f}")
+        if type(metric_value) == list:
+            print(f"{metric_name}: {[round(v,4) for v in metric_value]}")
+        else:
+            print(f"{metric_name}: {metric_value:.4f}")
 
     if val_dataloaders is not None:
         print(f"==> Evaluation metrics on validation dataset for {checkpoint_opt} checkpoint")
         metrics = evaluate_model(model, val_dataloaders)
         metrics_data[checkpoint_opt]['validation'] = metrics
         for metric_name, metric_value in metrics.items():
-            print(f"{metric_name}: {metric_value:.4f}")
+            if type(metric_value) == list:
+                print(f"{metric_name}: {[round(v,4) for v in metric_value]}")
+            else:
+                print(f"{metric_name}: {metric_value:.4f}")
 
 def launch_checkpoints_evaluation(
     train_datasets,
