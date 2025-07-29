@@ -105,7 +105,7 @@ def train_loop(
 
         # Process log
         epoch_metrics = {
-            key: np.mean([d[key] for d in metrics]).item() if type(metrics[0][key]) != list else [np.mean(m).item() for m in zip(*[d[key] for d in metrics])]
+            key: np.mean([d[key] for d in metrics if d[key] is not None]).item() if type(metrics[0][key]) != list else [np.mean(m).item() for m in zip(*[d[key] for d in metrics])]
             for key in metrics[0]
         }
         epoch_metrics['epoch_idx'] = epoch

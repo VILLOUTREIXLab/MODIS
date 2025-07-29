@@ -209,6 +209,8 @@ class Trainer:
                          if sum(is_labeled[i]) > 0]
             if len(modal_acc) > 0:
                 d_aux_acc = sum(modal_acc) / len(modal_acc)
+            else:
+                d_aux_acc = None
 
         # Losses
 
