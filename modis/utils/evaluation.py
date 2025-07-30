@@ -154,7 +154,7 @@ def launch_checkpoints_evaluation(
     except IOError as e:
         print(f"Error saving evaluation metrics file: {e}")
 
-def all_pairs_mse(X, X_hat):
+def avg_mse_all_pairs(X, X_hat):
     """Computes the average MSE between all pairs of vectors from X and X_hat"""
     differences = X[:, None, :] - X_hat[None, :, :]  # Broadcast to [n_samples_X, n_samples_X_hat, n_features]
     mse_matrix = torch.mean(differences ** 2, dim=2)  # Averaging over the feature axis (dim=2)
