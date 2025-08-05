@@ -118,7 +118,7 @@ def train_loop(
         #
         val_acc_str = ''
         if val_datasets is not None:
-            val_metrics = evaluate_model(trainer.model, train_dataloaders)
+            val_metrics = evaluate_model(trainer.model, val_dataloaders)
             epoch_metrics['val_acc'] = val_metrics.get('acc', 0.)
             val_acc_str = f"val_acc: {epoch_metrics['val_acc']:.4f}"
 
