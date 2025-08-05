@@ -37,9 +37,17 @@ def train_loop(
     device = config.device
     timestamp = time.strftime('%Y%m%d_%H%M%S')
     init_epoch = 0
+    best_epoch = 0
+    best_loss = float('inf')
+    val_acc = 0
+    
 
     if args.checkpoint:
         checkpoint_data = load_checkpoint(args.checkpoint)
+
+        best_epoch = checkpoint_data['best_epoch']
+        best_loss = checkpoint_data['best_loss']
+        val_acc = checkpoint_data['val_acc']
 
         snapshot = args.checkpoint.stem.split('_')[-1]
         log_file = args.checkpoint.parent / f"checkpoint_log_{snapshot}.json"
@@ -79,9 +87,6 @@ def train_loop(
         print(f"==> Starting {config.training_mode} training from scratch on {device} device")
 
     checkpoint_file = None
-    best_loss = float('inf')
-    val_acc = 0
-    best_epoch = 0
     start_time = time.time()
     for epoch in range(init_epoch, init_epoch+config.num_epochs):
         metrics = []
@@ -147,7 +152,10 @@ def train_loop(
                 val_acc = epoch_metrics['val_acc']
             best_epoch = epoch
             checkpoint_file = trainer.save_checkpoint(
-                epoch = epoch,
+                epoch=epoch,
+                best_epoch=best_epoch,
+                best_loss=best_loss,
+                val_acc=val_acc,
                 timestamp = timestamp,
                 config = config,
                 log = log,
@@ -165,12 +173,15 @@ def train_loop(
     # Save latest checkpoint
     if config.save_checkpoint_latest:    
         checkpoint_file = trainer.save_checkpoint(
-            epoch = epoch,
-            timestamp = timestamp,
-            config = config,
-            log = log,
-            save_path = save_path,
-            is_best = False
+            epoch=epoch,
+            best_epoch=best_epoch,
+            best_loss=best_loss,
+            val_acc=val_acc,
+            timestamp=timestamp,
+            config=config,
+            log=log,
+            save_path=save_path,
+            is_best=False
         )
     
     checkpoint_dir = checkpoint_file.parent if checkpoint_file is not None else None

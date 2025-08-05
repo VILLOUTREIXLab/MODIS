@@ -39,7 +39,10 @@ class Trainer:
 
     def save_checkpoint(
         self,
-        epoch: int, 
+        epoch: int,
+        best_epoch: int,
+        best_loss: float,
+        val_acc: float,
         timestamp: str,
         config,
         log: list,
@@ -50,6 +53,9 @@ class Trainer:
 
         checkpoint_data = {
             'epoch': epoch,
+            'best_epoch': best_epoch,
+            'best_loss': best_loss,
+            'val_acc': val_acc,
             'timestamp': timestamp,
             'model_state': self.model.state_dict(),
             'optimizer_state': self.optimizer.state_dict()
