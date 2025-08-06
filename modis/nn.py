@@ -133,13 +133,14 @@ class Model(nn.Module):
                 input_size = config.modalities[i].input_size,
                 encoder_ratios = [1.2, 1.0, 0.75, 0.5, 0.25] if not 'encoder_ratios' in config.modalities[i] else config.modalities[i].encoder_ratios,
                 latent_size = config.latent_size
-            ).to(self.device) for i in range(self.num_modalities)
+            ) for i in range(self.num_modalities)
         ])
         self.discriminator = Discriminator(
             latent_size = config.latent_size,
             num_modalities = self.num_modalities,
             num_classes = config.num_classes
-        ).to(self.device)
+        )
+        self.to(self.device)
 
     def forward(self, x: list[torch.Tensor], discriminator_only: bool = True):
         """
