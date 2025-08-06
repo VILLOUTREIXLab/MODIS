@@ -9,7 +9,7 @@ from modis.utils.config import validate_config
 def load_checkpoint(checkpoint_file: Path) -> dict:
     if not checkpoint_file.exists():
         raise FileNotFoundError(f"Checkpoint file {checkpoint_file} doesn't exist.")
-    checkpoint = torch.load(checkpoint_file)
+    checkpoint = torch.load(checkpoint_file, map_location="cpu")
     return checkpoint
 
 def load_log(checkpoint_file: Path) -> list:
