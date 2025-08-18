@@ -1,9 +1,12 @@
 import random
-from collections import Counter
+from itertools import combinations
+from typing import Any
+from collections import Counter, defaultdict
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset, Subset
+
 
 class PartiallyLabeledDataset(Dataset):
     """Adjust the labels in a labeled dataset for semisupervised mode with MODIS"""
@@ -272,3 +275,252 @@ def random_split(
         splits.append(split_datasets)
     
     return splits
+
+def _list_of_combinations(n: int) -> list[tuple[int, ...]]:
+    """
+    Generates all possible combinations of n items.
+
+    Args:
+        n: The total number of items.
+
+    Returns:
+        A list of tuples, where each tuple contains a unique combination (from 0 to n-1).
+    """
+    indices = list(range(n))
+    return [comb for r in range(1, n + 1) for comb in combinations(indices, r)]
+
+def _find_common_intersection(lists: list[list[Any]]) -> list[Any]:
+    """
+    Finds the common intersection among sublists.
+
+    Args:
+        lists (list[list]): List of lists of items to be compared.
+
+    Returns:
+        A list containing the elements that are present in all sublists.
+        Returns an empty list if there is no intersection.
+    """
+    if not lists:
+        return []
+    return list(set.intersection(*map(set, lists)))
+
+def _unique_intersections(indexes_list: list[list[str | int]]) -> dict[tuple[int, ...], list[str | int]]:
+    """
+    Return the unique intersections across all combinations of the input sublists.
+
+    Args:
+        indexes_list (list[list[str | int]]): 
+            A list of sublists, where each sublist contains identifiers 
+            (e.g., strings or integers) corresponding to a given modality or group.
+
+    Returns:
+        dict[tuple[int, ...], list[str | int]]:
+            A dictionary mapping:
+              - Keys: Tuples of indices indicating which sublists (modalities) 
+                form the combination.
+              - Values: Sorted lists of items that are present in *all* sublists 
+                of the given combination, but absent from every other sublist 
+                outside the combination.
+    """
+    num_modalities = len(indexes_list)
+    combination_dict = {}
+
+    # Iterate through all possible combinations of modalities
+    for comb_tuple in _list_of_combinations(num_modalities):
+        # Convert the tuple of combination indices to a list for easier indexing
+        comb_list = list(comb_tuple)
+
+        # Get the lists of sample IDs for the current combination of modalities
+        current_modalities_indexes = [indexes_list[i] for i in comb_list]
+
+        # Calculate the intersection of sample IDs for the current combination
+        intersection = set(_find_common_intersection(current_modalities_indexes))
+
+        # Identify the indices of the modalities *not* in the current combination
+        other_modalities_indices = set(range(num_modalities)) - set(comb_list)
+        other_indexes = set()
+
+        # Collect all sample IDs from the *other* modalities
+        for i in other_modalities_indices:
+            other_indexes.update(indexes_list[i])
+
+        # Find the sample IDs that are unique to the intersection of the current
+        # combination (i.e., present in the intersection but not in any other modality)
+        combination_dict[comb_tuple] = sorted(list(intersection - other_indexes))
+
+    return combination_dict
+
+def multimodal_dataset_split(
+    indexes_list: list[list[str | int]],
+    test_ratio: float = 0.2, 
+    stratify_by: list[list[int]] = None,
+    paired_only: bool = False,
+    random_seed: int = None
+) -> tuple[dict[int, list[Any]], dict[int, list[Any]]]:
+    """
+    Generate train/test splits for multi-modal datasets.
+
+    Args:
+        indexes_list (list[list[str | int]]): 
+            A list of sublists, where each sublist contains sample identifiers 
+            corresponding to a given modality or group.
+        test_ratio: The proportion of samples to allocate to the test set (default: 0.2).
+
+    Returns:
+        A tuple containing two dictionaries:
+        - The first dictionary (`train_samples_per_modality`) has modality indices as keys
+          and lists of training sample IDs for that modality as values.
+        - The second dictionary (`test_samples_per_modality`) has modality indices as keys
+          and lists of testing sample IDs for that modality as values.
+    """
+    if not 0 <= test_ratio <= 1:
+        raise ValueError("test_ratio must be between 0 and 1")
+
+    # Set random seed
+    if random_seed is not None:
+        random.seed(random_seed)
+
+    # Initialize dictionaries to store training and testing samples per modality
+    num_modalities = len(indexes_list)
+    train_samples_per_modality = {i: [] for i in range(num_modalities)}
+    test_samples_per_modality = {i: [] for i in range(num_modalities)}
+
+    # Get the dictionary of unique intersections per combination of modalities
+    intersections_dict = _unique_intersections(indexes_list)
+
+    if stratify_by is not None:
+        if len(stratify_by) != num_modalities:
+            raise ValueError("stratify_by must have the same length as indexes_list")
+        for i in range(len(stratify_by)):
+            if len(stratify_by[i]) != len(indexes_list[i]):
+                raise ValueError(f"stratify_by[{i}] must have the same length as indexes_list[{i}]")
+        # sample_id to class mapping
+        sample_id_class_dict = {k: v for row_k, row_v in zip(indexes_list, stratify_by) for k, v in zip(row_k, row_v)}
+
+    # Iterate through each combination of modalities and its unique intersecting samples
+    for comb_tuple, unique_samples in intersections_dict.items():
+        if paired_only and len(comb_tuple) != num_modalities: continue
+        
+        if not unique_samples:
+            continue  # Skip if there are no unique samples for this combination
+
+        n_total = len(unique_samples)
+        n_test = round(n_total * test_ratio)
+
+        # Ensure there are enough samples for the test set
+        if n_test <= 0 and n_total > 0:
+            raise ValueError(f"Not enough unique samples ({n_total}) for combination {comb_tuple} to create a test set with ratio {test_ratio}.")
+
+        if stratify_by is None:
+            # Randomly sample test samples from the unique samples
+            test_samples = random.sample(unique_samples, n_test)
+            # The remaining unique samples form the training set for this combination
+            train_samples = list(set(unique_samples) - set(test_samples))
+        else:
+            unique_samples_class = [sample_id_class_dict[i] for i in unique_samples]
+            classes_dict = {c:[] for c in set(unique_samples_class)}
+        
+            for sidx, s in enumerate(unique_samples):
+                c = unique_samples_class[sidx]
+                classes_dict[c].append(s)
+
+            class_nsamples_dict = {k:round(n_test * len(v)/n_total) for k,v in classes_dict.items()}
+           
+            test_samples = []
+            for ic, n_samples in class_nsamples_dict.items():
+                # if class_nsamples_dict[ic] <= 0:
+                #     raise ValueError(f"Not enough unique samples ({n_total}) for combination {comb_tuple} to create a test set with ratio {test_ratio}")
+                test_samples.extend(random.sample(classes_dict[ic], n_samples))
+            test_samples = sorted(test_samples)
+
+            train_samples = list(set(unique_samples) - set(test_samples))
+        
+        # Add the training and testing samples to the respective dictionaries
+        # for each modality involved in the current combination
+        for i_mod in comb_tuple:
+            train_samples_per_modality[i_mod].extend(train_samples)
+            test_samples_per_modality[i_mod].extend(test_samples)
+
+    for k,v in train_samples_per_modality.items():
+        train_samples_per_modality[k] = sorted(v)
+
+    for k,v in test_samples_per_modality.items():
+        test_samples_per_modality[k] = sorted(v)
+
+    return train_samples_per_modality, test_samples_per_modality
+
+def stratified_k_fold(k: int, datasets: list[torch.utils.data.Dataset], sample_ids: list[str|int] | None, random_seed: int | None = None) -> list[list[str]]:
+    """
+    Generator that returns stratified k folds of train and test datasets for a multi-modal dataset
+
+    Args:
+        k (int): Number of folds to divide each dataset into
+        datastes (list[torch.utils.data.Dataset]): Input dataset
+        sample_ids (list[str|int] | None): List of sample ids for paired or partially paired datasets
+                                           Use None if unpaired
+        random_seed (int): Seed for reproducibility
+    """
+    assert k >= 2, "K-fold cross-validation requires k >= 2"
+
+    if sample_ids is None:
+        # Assume unpaired samples
+        sample_ids = [
+            [
+                sample_index + sum([len(ds) for i,ds in enumerate(datasets) if i<mi])
+                for sample_index,_ in enumerate(ds)
+            ] 
+            for mi,ds in enumerate(datasets)
+        ]
+    else:
+        sample_ids = sample_ids.copy()
+
+    classes = [[sample[1] for sample in ds] for ds in datasets]
+    idtoidx = [{sid:i for i,sid in enumerate(modality_ids)} for modality_ids in sample_ids]
+
+    # Generate folds
+    folds = []
+    for n in range(k, 0, -1):
+        _, test_indexes = multimodal_dataset_split(
+            sample_ids,
+            test_ratio=1/n,
+            stratify_by=classes,
+            paired_only=False,
+            random_seed=random_seed
+        )
+        folds.append(test_indexes)
+
+        # Remove test_indexes from sample_ids and classes for next loop
+        for modality_index in range(len(sample_ids)):
+            indexes_to_remove = [i for i,idx in enumerate(sample_ids[modality_index]) if idx not in test_indexes[modality_index]]
+
+            sample_ids[modality_index] = [idx for i,idx in enumerate(sample_ids[modality_index]) if i in indexes_to_remove]
+            classes[modality_index] = [sample_class for i,sample_class in enumerate(classes[modality_index]) if i in indexes_to_remove]
+    
+    # Generate train, test datasets from k-folds
+    for test_index in range(k):
+        test_fold_ids = folds[test_index]
+        train_folds = folds[:test_index] + folds[test_index+1:]
+
+        # Concatenate train folds
+        train_fold = defaultdict(list)
+        for fold in train_folds:
+            for key, value in fold.items():
+                train_fold[key].extend(value)        
+        train_fold_ids = dict(train_fold)
+
+        # Convert sample ids to sample indexes
+        test_fold_indexes = {
+            modality_id: [idtoidx[modality_id][sample_id] for sample_id in modality]
+            for modality_id, modality in test_fold_ids.items()
+        }
+
+        train_fold_indexes = {
+            modality_id: [idtoidx[modality_id][sample_id] for sample_id in modality]
+            for modality_id, modality in train_fold_ids.items()
+        }
+        
+        # Generate train, test dataset for this k-fold
+        test_ds = [Subset(ds, test_fold_indexes[di]) for di, ds in enumerate(datasets)]
+        train_ds = [Subset(ds, train_fold_indexes[di]) for di, ds in enumerate(datasets)]
+        
+        yield train_ds, test_ds
