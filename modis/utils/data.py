@@ -113,12 +113,13 @@ class PartiallyLabeledDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        x, y = self.dataset[index]
+        sample = self.dataset[index]
+    
         if self.is_labeled[index]:
-            return x, y
+            return sample
         else:
             # Adjust sample label to -1 (to represent unlabeled)
-            return x, -1
+            return (sample[0], -1) + sample[2:]
 
 
 def get_dataloaders(
