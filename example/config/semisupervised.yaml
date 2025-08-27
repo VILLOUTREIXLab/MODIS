@@ -12,8 +12,7 @@ training_mode: semisupervised
 num_classes: 5
 batch_size: 32
 num_epochs: 30
-generators_lr: 1e-4
-discriminator_lr: 1e-4
+learning_rate: 1e-4
 beta: 1e-4
 beta1: 0.5
 lambda_r: 10.0

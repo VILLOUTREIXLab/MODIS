@@ -31,9 +31,8 @@ def validate_config(config: DictConfig) -> None:
     # Required fields validation
     required_fields = [
         'dataset_name', 'model_name', 'latent_size', 'modalities', 
-        'training_mode', 'batch_size', 'num_epochs', 'generators_lr', 
-        'discriminator_lr', 'beta', 'beta1', 'lambda_r', 'device',
-        'save_checkpoint_latest', 'save_checkpoint_best'
+        'training_mode', 'batch_size', 'num_epochs', 'learning_rate', 
+        'beta', 'beta1', 'lambda_r', 'device', 'save_checkpoint_latest', 'save_checkpoint_best'
     ]
     
     for field in required_fields:
@@ -59,12 +58,9 @@ def validate_config(config: DictConfig) -> None:
     elif error is None and config.num_epochs <= 0:
         error = f'Invalid num_epochs: {config.num_epochs}. Must be positive integer.'
     
-    elif error is None and config.generators_lr <= 0:
-        error = f'Invalid generators_lr: {config.generators_lr}. Must be positive.'
-    
-    elif error is None and config.discriminator_lr <= 0:
-        error = f'Invalid discriminator_lr: {config.discriminator_lr}. Must be positive.'
-    
+    elif error is None and config.learning_rate <= 0:
+        error = f'Invalid learning_rate: {config.learning_rate}. Must be positive.'
+
     elif error is None and not (0 <= config.beta1 <= 1):
         error = f'Invalid beta1: {config.beta1}. Must be between 0 and 1.'
     
@@ -103,7 +99,7 @@ def validate_config(config: DictConfig) -> None:
             error = 'num_classes is required for supervised training mode'
         elif config.num_classes <= 0:
             error = f'Invalid num_classes: {config.num_classes}. Must be positive integer.'
-    
+
     # Boolean fields validation
     if error is None:
         boolean_fields = ['save_checkpoint_latest', 'save_checkpoint_best']
@@ -115,13 +111,13 @@ def validate_config(config: DictConfig) -> None:
     if error is None:
         if type(config.beta) == ListConfig and len(config.beta) != len(config.modalities):
             error = "Invalid beta parameter. The length of the list must match the number of modalities."
-        elif type(config.beta) != float:
+        elif type(config.beta) not in (float, ListConfig):
             error = "Invalid beta parameter. Must be a float or a list."
-    
+
     if error is not None:
         print(f'[-] Configuration error: {error}')
         sys.exit(1)
-    
+
     # Auto device detection
     if config.device == 'auto':
         config.device = "cuda" if torch.cuda.is_available() else "cpu"

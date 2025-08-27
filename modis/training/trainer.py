@@ -23,11 +23,11 @@ class Trainer:
         self.optimizer = torch.optim.Adam(
             [{
                 'params': [param for vae in self.model.variational_autoencoders for param in vae.parameters()],
-                'lr': config.generators_lr
+                'lr': config.learning_rate
             },
             {
                 'params': self.model.discriminator.parameters(),
-                'lr': config.discriminator_lr
+                'lr': config.learning_rate
             }],
             betas=(config.beta1, 0.999)
         )
