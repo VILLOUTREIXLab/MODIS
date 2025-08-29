@@ -16,7 +16,7 @@ from modis.utils.evaluation import evaluate_model, launch_checkpoints_evaluation
 from modis.utils.plots import checkpoint_report_plots
 from modis.utils.io import load_checkpoint, load_log
 
-def read_args():
+def parse_args():
     parser = argparse.ArgumentParser(description="MODIS Training Configuration")
     parser.add_argument('--checkpoint', type=Path, default=None, help='Checkpoint file.')
     args = parser.parse_args()
@@ -26,9 +26,10 @@ def train_loop(
     config: DictConfig,
     train_datasets: list[torch.utils.data.Dataset],
     val_datasets: list[torch.utils.data.Dataset] | None = None,
-    show_dataset_summary: bool = True
+    show_dataset_summary: bool = True,
+    read_args: bool = True
 ) -> Path | None:
-    args = read_args()
+    args = parse_args() if read_args else None
 
     # Variables
     log = []
@@ -40,9 +41,8 @@ def train_loop(
     best_epoch = 0
     best_loss = float('inf')
     val_acc = 0
-    
 
-    if args.checkpoint:
+    if args is not None and args.checkpoint:
         checkpoint_data = load_checkpoint(args.checkpoint)
 
         best_epoch = checkpoint_data['best_epoch']
@@ -186,6 +186,9 @@ def train_loop(
     
     checkpoint_dir = checkpoint_file.parent if checkpoint_file is not None else None
 
+    del trainer
+    torch.cuda.empty_cache()
+
     return checkpoint_dir
 
 def train(
@@ -194,14 +197,16 @@ def train(
     val_datasets: list[torch.utils.data.Dataset] | None = None,
     show_dataset_summary: bool = True,
     run_evaluation: bool = True,
-    generate_plots: bool = True
+    generate_plots: bool = True,
+    read_args: bool = True
 ) -> Path | None:
     # Train model
     checkpoint_dir = train_loop(
         config=config,
         train_datasets=train_datasets,
         val_datasets=val_datasets,
-        show_dataset_summary=show_dataset_summary
+        show_dataset_summary=show_dataset_summary,
+        read_args=read_args
     )
 
     if checkpoint_dir is None:
