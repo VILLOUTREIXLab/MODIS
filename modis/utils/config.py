@@ -180,3 +180,9 @@ def generate_grid(base_config_file: pathlib.Path, params: dict):
         grid.append(new_config)
 
     return grid
+
+def config_from_dict(config_dict: dict) -> DictConfig:
+    """Create a configuration from config file"""
+    config = OmegaConf.create(config_dict)
+    validate_config(config)
+    return config
