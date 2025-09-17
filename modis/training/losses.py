@@ -122,36 +122,6 @@ class EntropyLoss(nn.Module):
 
         return loss
 
-
-def joint_probability(logits1, logits2):
-    # Convert logits to probabilities
-    probs1 = F.softmax(logits1, dim=1)
-    probs2 = F.softmax(logits2, dim=1)
-    
-    # Compute outer product
-    joint_probs = torch.bmm(probs1.unsqueeze(2), probs2.unsqueeze(1))
-    
-    # Normalize
-    joint_probs = joint_probs / joint_probs.sum(dim=(1,2), keepdim=True)
-    
-    return joint_probs
-
-def joint_entropy(logits1, logits2):
-    # Convert logits to probabilities
-    probs1 = F.softmax(logits1, dim=1)
-    probs2 = F.softmax(logits2, dim=1)
-    
-    # Compute outer product for joint probability
-    joint_probs = torch.bmm(probs1.unsqueeze(2), probs2.unsqueeze(1))
-    
-    # Normalize
-    joint_probs = joint_probs / joint_probs.sum(dim=(1,2), keepdim=True)
-    
-    # Compute entropy
-    entropy = torch.sum(joint_probs * torch.log2(joint_probs + 1e-12), dim=(1,2))
-    
-    return entropy
-
 class ClusteringLoss(nn.Module):
     """
     Computes the entropy regularization to avoid the assignment of only a subset of the total clusters
@@ -162,9 +132,6 @@ class ClusteringLoss(nn.Module):
         self.ddc_loss = DDCLoss()
         self.entropy_loss = EntropyLoss()
 
-    def forward(self, adv_layer, aux_layer, hidden_layer):
+    def forward(self, aux_layer, hidden_layer):
         loss = self.ddc_loss(hidden_layer, aux_layer) + self.entropy_loss(aux_layer)
-        #loss = self.entropy_loss(joint_probability(adv_layer, aux_layer))
-        #loss = self.ddc_loss(hidden_layer, aux_layer) + self.entropy_loss(adv_layer) + self.entropy_loss(aux_layer)
-        #loss = self.ddc_loss(hidden_layer, aux_layer) + joint_entropy(adv_layer, aux_layer).mean()
         return loss

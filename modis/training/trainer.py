@@ -232,7 +232,7 @@ class Trainer:
         # Cluster loss
         d_cluster_loss = torch.tensor(0., device=device)
         for i in range(num_modalities):
-            d_cluster_loss += self.cluster_loss(d_adv[i], d_aux[i], d_hidden[i])
+            d_cluster_loss += self.cluster_loss(d_aux[i], d_hidden[i])
 
         d_train_loss = d_adv_loss + d_aux_loss + d_cluster_loss
 
@@ -326,7 +326,7 @@ class Trainer:
 
         d_cluster_loss = torch.tensor(0., device=device)
         for i in range(num_modalities):
-            d_cluster_loss += self.cluster_loss(d_adv[i], d_aux[i], d_hidden[i])
+            d_cluster_loss += self.cluster_loss(d_aux[i], d_hidden[i])
 
         if not self.use_relativistic_loss:
             d_loss = (1 / (num_modalities-1) * d_adv_loss) + d_aux_loss + d_cluster_loss  # Divide adversarial loss by the number of combinations
