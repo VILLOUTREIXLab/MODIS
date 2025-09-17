@@ -1,12 +1,34 @@
-import os
+"""
+This module defines the MODIS architecture. It includes a Variational Autoencoder 
+(VAE) for each modality and a shared Discriminator for latent space analysis and
+classification.
 
+The key components are:
+    - `VAE`: A Variational Autoencoder designed to learn a latent representation
+      of a single data modality.
+    - `Discriminator`: A multi-task discriminator used to classify samples in the
+      latent space, distinguishing between real/fake samples and predicting
+      their class labels.
+    - `Model`: The main class that combines multiple VAEs and a single
+      Discriminator to form MODIS. It handles forward passes, predictions,
+      and cross-modal translation.
+"""
 import torch
 import torch.nn as nn
-
 
 class VAE(nn.Module):
     """
     Variational Autoencoder (VAE) class
+
+    This VAE is designed to encode input data into a latent distribution and
+    decode a sample from that distribution back into the original data space.
+
+    Args:
+        input_size (int): The number of features in the input data.
+        encoder_ratios (list[float]): A list of ratios to determine the size
+                                      of each hidden layer in the encoder
+                                      relative to the input size.
+        latent_size (int): The dimensionality of the latent space.
     """
 
     def __init__(
@@ -18,6 +40,17 @@ class VAE(nn.Module):
         super().__init__()
 
         def block(in_features: int, out_features: int, normalize: bool = True):
+            """
+            Helper function to create a building block for the VAE.
+
+            Args:
+                in_features (int): Number of input features.
+                out_features (int): Number of output features.
+                normalize (bool): If True, adds a BatchNorm1d layer.
+
+            Returns:
+                list: A list of nn.Module layers.
+            """
             layers = [nn.Linear(in_features, out_features)]
             if normalize:
                 layers.append(nn.BatchNorm1d(out_features, 0.8))
@@ -25,6 +58,19 @@ class VAE(nn.Module):
             return layers
 
         def build_from_ratios(input_size: int, ratios: list, output_size: int, decoder: bool = False):
+            """
+            Builds the VAE from a list of ratios relative to input size.
+
+            Args:
+                input_size (int): The size of the first layer's input.
+                ratios (list): Ratios for determining layer sizes.
+                output_size (int): The size of the final layer's output.
+                decoder (bool): If True, builds a decoder network; otherwise,
+                                builds an encoder.
+
+            Returns:
+                nn.Sequential: The constructed neural network.
+            """
             layers = []
             current_size = input_size
             for i, ratio in enumerate(ratios):
@@ -51,22 +97,71 @@ class VAE(nn.Module):
         self.decoder = build_from_ratios(latent_size, decoder_ratios, input_size, decoder=True)
 
     def reparameterize(self, mu, logvar):
+        """
+        Performs the reparameterization trick to sample from the latent space.
+
+        Args:
+            mu (torch.Tensor): The mean of the latent distribution.
+            logvar (torch.Tensor): The log variance of the latent distribution.
+
+        Returns:
+            torch.Tensor: A sampled tensor from the latent space.
+        """
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return mu + eps * std
 
     def encode(self, x):
+        """
+        Encodes the input data into the mean and log variance of the latent
+        distribution.
+
+        Args:
+            x (torch.Tensor): The input data.
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: A tuple containing the mean (mu)
+                                               and log variance (logvar).
+        """
         out = x.view(x.size(0), -1)
         out = self.encoder(out)
         return self.mu(out), self.logvar(out)
 
     def latents(self, x):
+        """
+        Returns a sample from the latent space for the input data.
+
+        Args:
+            x (torch.Tensor): The input data.
+
+        Returns:
+            torch.Tensor: A sample from the latent distribution.
+        """
         return self.reparameterize(*self.encode(x))
 
     def decode(self, z):
+        """
+        Decodes a latent space sample back to the original data space.
+
+        Args:
+            z (torch.Tensor): A sample from the latent space.
+
+        Returns:
+            torch.Tensor: The reconstructed data.
+        """
         return self.decoder(z)
 
     def forward(self, x):
+        """
+        Performs a full forward pass through the VAE.
+
+        Args:
+            x (torch.Tensor): The input data.
+
+        Returns:
+            tuple: A tuple containing the reconstructed data, mean, log variance,
+                   and latent sample.
+        """
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
         recon_x = self.decode(z)
@@ -74,7 +169,17 @@ class VAE(nn.Module):
 
 class Discriminator(nn.Module):
     """
-    AC-GAN discriminator class
+    Discriminator class
+
+    This discriminator is designed for use in an Auxiliary Classifier GAN (AC-GAN)
+    setting. It performs two tasks: a binary real/fake classification and an
+    auxiliary classification for a specific number of classes.
+
+    Args:
+        latent_size (int): The dimensionality of the input latent space.
+        num_modalities (int): The number of modalities, used for the adversarial
+                              layer's output size.
+        num_classes (int): The number of classes for the auxiliary classifier.
     """
 
     def __init__(self, latent_size, num_modalities, num_classes):
@@ -95,6 +200,16 @@ class Discriminator(nn.Module):
         self.aux_layer = nn.Sequential(nn.Linear(256, num_classes))
 
     def forward(self, z):
+        """
+        Performs a forward pass through the discriminator.
+
+        Args:
+            z (torch.Tensor): The input latent tensor.
+
+        Returns:
+            tuple: A tuple containing the adversarial output, auxiliary
+                   output, and the hidden layer output.
+        """
         hidden = self.fc(z)
         adv_out = self.adv_layer(hidden)
         aux_out = self.aux_layer(hidden)
@@ -102,10 +217,18 @@ class Discriminator(nn.Module):
     
     def predict(self, z, include_modality_pred: bool = False) -> torch.Tensor | tuple[torch.Tensor]:
         """
-        Do the cluster prediction for each sample
+        Predicts the class label for each sample in the latent space.
 
         Args:
-            include_modality_pred (boolean): Return also modality label is True
+            z (torch.Tensor): A tensor of latent space samples.
+            include_modality_pred (bool): If True, also returns the modality
+                                          label prediction.
+
+        Returns:
+            torch.Tensor | tuple[torch.Tensor]: The predicted class labels, or
+                                                a tuple of class and modality
+                                                predictions if
+                                                ``include_modality_pred`` is True.
         """
         hidden = self.fc(z)
         aux_out = self.aux_layer(hidden)
@@ -120,6 +243,18 @@ class Discriminator(nn.Module):
         return class_pred
 
 class Model(nn.Module):
+    """
+    Main model class combining multiple VAEs and a single Discriminator.
+
+    This model is designed for multi-modal learning, where each modality has its
+    own VAE, and a shared discriminator operates on the concatenated latent
+    representations.
+
+    Args:
+        config (omegaconf.DictConfig): The configuration object for the model,
+                                        including details about modalities,
+                                        latent size, and device.
+    """
 
     def __init__(self, config):
         super().__init__()
@@ -144,14 +279,19 @@ class Model(nn.Module):
 
     def forward(self, x: list[torch.Tensor], discriminator_only: bool = True):
         """
-        Feed forward the model and return the outputs required for training
+        Performs a forward pass through the model.
 
         Args:
-            x (list[torch.Tensor]): Each list element has the samples of an individual modality
-            discriminator_only (boolean): If True, only return the outputs need to train the discriminator
+            x (list[torch.Tensor]): A list where each element contains samples
+                                    for a single modality.
+            discriminator_only (bool): If True, only returns the outputs needed
+                                       to train the discriminator.
 
-        Return:
-            (tuple)
+        Returns:
+            tuple: A tuple of outputs, which varies based on
+                   `discriminator_only`.
+                   - If True: Returns (d_adv, d_aux, d_hidden)
+                   - If False: Returns (recon_x, mu, logvar, d_adv, d_aux, d_hidden)
         """
         if discriminator_only:
             latents = [self.get_latents(x[i], input_modality=i) for i in range(self.num_modalities)]
@@ -164,11 +304,14 @@ class Model(nn.Module):
 
     def get_latents(self, x: torch.Tensor, input_modality: int) -> torch.Tensor:
         """
-        Get the latens of the input samples
+        Gets the latent representation of the input samples for a given modality.
+
         Args:
-            x (torch.Tensor): Samples, shape (samples, features)
-            x (torch.Tensor): Modality samples
-            input_modality (int): Modality VAE index in the model to which the samples belong
+            x (torch.Tensor): Samples of a single modality, shape (samples, features).
+            input_modality (int): The index of the VAE for the input modality.
+
+        Returns:
+            torch.Tensor: The latent representation of the samples.
         """
         self.eval()
         with torch.no_grad():
@@ -177,14 +320,14 @@ class Model(nn.Module):
 
     def predict(self, x: torch.Tensor, input_modality: int) -> torch.Tensor | list[torch.Tensor, torch.Tensor]:
         """
-        Predict the cluster (class or label) of each sample
+        Predicts the cluster (class or label) of each sample.
 
         Args:
-            x (torch.Tensor): Samples, shape (samples, features)
-            input_modality (int): Modality VAE index in the model to which the samples belong
+            x (torch.Tensor): Samples, shape (samples, features).
+            input_modality (int): The index of the VAE for the input modality.
 
-        Return:
-            (torch.Tensor): Label (cluster) prediction
+        Returns:
+            torch.Tensor: The predicted class labels.
         """
         self.eval()
         with torch.no_grad():
@@ -193,15 +336,19 @@ class Model(nn.Module):
     
     def translate(self, x: torch.Tensor, input_modality: int, output_modality: int) -> torch.Tensor:
         """
-        Do cross-modal translation
+        Performs cross-modal translation.
+
+        This function takes samples from one modality, encodes them into the
+        latent space, and then decodes them using the VAE of a different
+        modality.
 
         Args:
-            x (torch.Tensor): Samples to translate, shape (samples, features)
-            input_modality (int): Modality VAE index in the model to which the samples belong
-            output_modality (int): Modality VAE index in the model to which the samples will be translated
+            x (torch.Tensor): Samples to translate, shape (samples, features).
+            input_modality (int): The index of the source modality's VAE.
+            output_modality (int): The index of the target modality's VAE.
 
-        Return:
-            (torch.Tensor): Approximation of the samples in the target modality
+        Returns:
+            torch.Tensor: The reconstructed samples in the target modality.
         """
         self.eval()
         with torch.no_grad():
@@ -210,7 +357,13 @@ class Model(nn.Module):
         return recon_x.cpu().numpy()
 
     def load_from_checkpoint(self, checkpoint_file: str, verbose: bool = True) -> None:
-        """Load a model from a checkpoint file"""
+        """
+        Loads the model's state from a checkpoint file.
+
+        Args:
+            checkpoint_file (str): The path to the checkpoint file.
+            verbose (bool): If True, prints a confirmation message.
+        """
         import pathlib
         from modis import load_checkpoint
 
@@ -220,13 +373,21 @@ class Model(nn.Module):
             print(f"Model loaded from {checkpoint_file}")
 
     def load_from_state_dict(self, model_state_dict, verbose=True) -> None:
-        """Load a model from a state dictionary"""
+        """
+        Loads the model's state from a state dictionary.
+
+        Args:
+            model_state_dict (dict): The state dictionary.
+            verbose (bool): If True, prints a confirmation message.
+        """
         self.load_state_dict(model_state_dict)
         if verbose:
             print(f"Model loaded from state dict")
 
     def print_model_params(self) -> None:
-        """Detail the number of params in each module of the model"""
+        """
+        Prints the number of trainable parameters for each module of the model.
+        """
         for idx, vae in enumerate(self.variational_autoencoders):
             vae_params = sum([p.numel()for name,p in vae.named_parameters()])
             print(f"{self.modality_names[idx]} VAE params: {vae_params}")
