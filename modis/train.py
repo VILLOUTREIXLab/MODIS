@@ -1,3 +1,19 @@
+"""
+This module provides functions for training a MODIS model, including setting up
+the training loop, handling checkpoints, and performing evaluations.
+
+The main functions are:
+    - `train_loop`: Manages the core training process, including epoch-based
+      iteration, loss calculation, and checkpoint saving.
+    - `train`: Orchestrates the complete training workflow, which can include
+      the training loop, model evaluation, and report generation.
+
+The module supports:
+    - Resuming training from a saved checkpoint.
+    - Saving the best and/or latest model checkpoints based on performance metrics.
+    - Evaluating model performance on validation datasets.
+    - Generating plots and reports for the training and evaluation process.
+"""
 import time
 import argparse
 from pathlib import Path
@@ -17,6 +33,14 @@ from modis.utils.plots import checkpoint_report_plots
 from modis.utils.io import load_checkpoint, load_log
 
 def parse_args():
+    """
+    Parses command-line arguments.
+
+    The only argument supported right now is --checkpoint, that allows resuming training.
+
+    Returns:
+        argparse.Namespace: An object containing the parsed arguments.
+    """
     parser = argparse.ArgumentParser(description="MODIS Training Configuration")
     parser.add_argument('--checkpoint', type=Path, default=None, help='Checkpoint file.')
     args = parser.parse_args()
@@ -29,6 +53,23 @@ def train_loop(
     show_dataset_summary: bool = True,
     read_args: bool = True
 ) -> Path | None:
+    """
+    Executes the main training loop for the model.
+
+    This function handles the epoch-wise training process, including iterating
+    through dataloaders, performing training steps, collecting training performance metrics, and
+    saving checkpoints.
+
+    Args:
+        config (DictConfig): The training configuration object.
+        train_datasets (list[torch.utils.data.Dataset]): A list of training datasets.
+        val_datasets (list[torch.utils.data.Dataset] | None): A list of validation datasets, or None if not provided.
+        show_dataset_summary (bool): If True, prints a summary of the training and validation datasets.
+        read_args (bool): If True, parses command-line arguments to check for a checkpoint to resume from.
+
+    Returns:
+        Path | None: The path to the directory where checkpoints were saved, or None if no checkpoints were saved.
+    """
     args = parse_args() if read_args else None
 
     # Variables
@@ -200,6 +241,25 @@ def train(
     generate_plots: bool = True,
     read_args: bool = True
 ) -> Path | None:
+    """
+    Orchestrates the complete training workflow.
+
+    This function combines the training loop, model evaluation, and plot
+    generation into a single, comprehensive process.
+
+    Args:
+        config (DictConfig): The training configuration object.
+        train_datasets (list[torch.utils.data.Dataset]): A list of training datasets.
+        val_datasets (list[torch.utils.data.Dataset] | None): A list of validation datasets, or None if not provided.
+        show_dataset_summary (bool): If True, prints a summary of the datasets before training starts.
+        run_evaluation (bool): If True, runs evaluation on the saved checkpoints after training.
+        generate_plots (bool): If True, generates report plots for the training and evaluation results.
+        read_args (bool): If True, parses command-line arguments.
+
+    Returns:
+        Path | None: The path to the directory where checkpoints and reports were saved, or None if the training loop did not produce any checkpoints.
+    """
+
     # Train model
     checkpoint_dir = train_loop(
         config=config,
