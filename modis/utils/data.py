@@ -22,31 +22,32 @@ class PartiallyLabeledDataset(Dataset):
         remove_unlabeled: bool| list[int] = False,
         random_seed: int | None = None
     ) -> None:
-        """
-        Adjust the number of samples that retain their labels (remaining
-        labels are set to -1).
+        """Adjust the number of samples that retain their labels.
+
+        Remaining labels are set to -1 to denote unlabeled samples.
 
         Args:
-            labeled_samples_ratio (float): 
+            dataset: The dataset to modify.
+            labeled_samples_ratio (float, optional): 
                 Ratio (0–1) of labeled samples randomly distributed across
                 classes relative to unlabeled samples in the dataset.
-            labeled_samples (int):
+            labeled_samples (int, optional):
                 Number of samples to retain labels, randomly distributed
                 across classes.
-            labeled_class_samples (int | list):
+            labeled_class_samples (int | list, optional):
                 Fixed number of labeled samples per class. If an integer,
                 applies to all classes; if a list (matching the number of
                 classes), specifies labeled samples per class.
-            labeled_class_samples_ratio (float | list):
+            labeled_class_samples_ratio (float | list, optional):
                 Same as labeled_class_samples, but specifies the ratio (0 to 1)
                 of labeled samples per class.
-            num_random_samples (int):
+            num_random_samples (int, optional):
                 Generate a subset with this number of samples; previous 
                 parameters apply to this subset.
-            remove_unlabeled (bool): 
+            remove_unlabeled (bool | list, optional): 
                 If True, all unlabeled samples are removed; if a list,
                 unlabeled samples from the specified classes are removed.
-            random_seed (int):
+            random_seed (int, optional):
                 Integer seed to ensure reproducible random operations
                 across runs.
         """
@@ -128,16 +129,33 @@ def get_dataloaders(
     drop_last: bool = True,
     shuffle: bool = True
 ) -> list[torch.utils.data.DataLoader]:
-    """Return a dataloader for each dataset"""
+    """Return a dataloader for each dataset.
+    
+    Args:
+        datasets: A list of datasets to be wrapped in DataLoaders.
+        batch_size: The batch size for each DataLoader.
+        drop_last: If True, drops the last incomplete batch.
+        shuffle: If True, shuffles the data at the beginning of each epoch.
+
+    Returns:
+        A list of PyTorch DataLoaders, one for each input dataset.
+    """
     dataloaders = [torch.utils.data.DataLoader(ds, batch_size=batch_size, drop_last=drop_last, shuffle=shuffle)
                    for ds in datasets]
     return dataloaders
 
 def summarize_dataset(dataloaders: list[torch.utils.data.DataLoader], modality_names: list | None = None) -> None:
-    """
-    Print the total number of samples in a dataloader and their class distribution.
+    """Print the total number of samples and their class distribution.
     
-    Note: Requires labeled datasets
+    This function provides a summary of the samples within a list of
+    dataloaders, including the total count and a breakdown of samples per class.
+    It requires labeled datasets.
+
+    Args:
+        dataloaders: A list of PyTorch DataLoaders to be summarized.
+        modality_names (list | None, optional): 
+            A list of names for each modality to be used in the printout. 
+            Defaults to None, in which case a numbered index is used.
     """
     if modality_names:
         assert len(modality_names) == len(dataloaders), "The dataloaders and modality names provided should have the same length"
@@ -171,8 +189,25 @@ def get_samples_from_dataloader(
     num_samples: int = None,
     device: str = None
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """
-    Read a specific number of samples from a dataloader
+    """Read a specific number of samples from a dataloader.
+    
+    Args:
+        dataloader: The DataLoader to read samples from.
+        num_samples (int, optional): 
+            The number of samples to return. If None, returns all samples.
+            Defaults to None.
+        device (str, optional): 
+            The device ("cuda" or "cpu") to move the tensors to.
+            Defaults to None.
+
+    Returns:
+        A tuple containing two tensors:
+        - The first tensor (`samples`) contains the sample data.
+        - The second tensor (`labels`) contains the corresponding labels.
+    
+    Raises:
+        Exception: If the requested `num_samples` is greater than the total 
+            number of samples in the dataset.
     """
     dataset_size = len(dataloader.dataset)
     batch_size = dataloader.batch_size
@@ -206,17 +241,31 @@ def random_split(
         paired: bool,
         random_seed: int | None = None
 ) -> list:
-    """
-    Randomly split a dataset or multi-modal dataset
+    """Randomly split a dataset or multi-modal dataset.
     
+    This function splits one or more datasets into subsets based on a list of 
+    length ratios. For multi-modal datasets, it can ensure that corresponding 
+    samples are kept together across all datasets.
+
     Args:
-        dataset: Single Dataset or list of Datasets
-        length_ratios: List of ratios for each split (should sum to 1.0)
-        random_seed: Random seed for reproducibility
-        paired: If True, ensures corresponding samples across datasets stay together
+        dataset: A single PyTorch `Dataset` or a list of `Dataset` objects.
+        length_ratios: A list of floats representing the ratios for each split. 
+            The ratios must sum to 1.0.
+        paired: If True, ensures corresponding samples across multiple datasets 
+            are kept together in the splits. This parameter is ignored for a single
+            dataset input.
+        random_seed (int, optional): A seed for the random number generator to 
+            ensure reproducibility. Defaults to None.
     
     Returns:
-        List of splits, where each split contains Dataset(s) in the same format as input
+        A list of splits. For a single dataset, the list contains `Subset` objects.
+        For multiple datasets, the list contains lists of `Subset` objects, where 
+        each inner list represents a split.
+    
+    Raises:
+        ValueError: If the dataset list is empty, if all datasets don't have the 
+            same length when `paired` is True, or if `length_ratios` do not sum 
+            to 1.0.
     """
     # Handle single dataset case
     if isinstance(dataset, Dataset):
@@ -278,24 +327,23 @@ def random_split(
     return splits
 
 def _list_of_combinations(n: int) -> list[tuple[int, ...]]:
-    """
-    Generates all possible combinations of n items.
+    """Generates all possible combinations of n items.
 
     Args:
         n: The total number of items.
 
     Returns:
-        A list of tuples, where each tuple contains a unique combination (from 0 to n-1).
+        A list of tuples, where each tuple contains a unique combination 
+        (from 0 to n-1).
     """
     indices = list(range(n))
     return [comb for r in range(1, n + 1) for comb in combinations(indices, r)]
 
 def _find_common_intersection(lists: list[list[Any]]) -> list[Any]:
-    """
-    Finds the common intersection among sublists.
+    """Finds the common intersection among sublists.
 
     Args:
-        lists (list[list]): List of lists of items to be compared.
+        lists: List of lists of items to be compared.
 
     Returns:
         A list containing the elements that are present in all sublists.
@@ -306,22 +354,22 @@ def _find_common_intersection(lists: list[list[Any]]) -> list[Any]:
     return list(set.intersection(*map(set, lists)))
 
 def _unique_intersections(indexes_list: list[list[str | int]]) -> dict[tuple[int, ...], list[str | int]]:
-    """
-    Return the unique intersections across all combinations of the input sublists.
+    """Return the unique intersections across all combinations of the input sublists.
+
+    This function identifies samples that are shared among specific combinations of
+    modalities but are not present in any other modality outside that combination.
 
     Args:
-        indexes_list (list[list[str | int]]): 
-            A list of sublists, where each sublist contains identifiers 
+        indexes_list: A list of sublists, where each sublist contains identifiers 
             (e.g., strings or integers) corresponding to a given modality or group.
 
     Returns:
-        dict[tuple[int, ...], list[str | int]]:
-            A dictionary mapping:
-              - Keys: Tuples of indices indicating which sublists (modalities) 
-                form the combination.
-              - Values: Sorted lists of items that are present in *all* sublists 
-                of the given combination, but absent from every other sublist 
-                outside the combination.
+        A dictionary mapping:
+          - Keys: Tuples of indices indicating which sublists (modalities) 
+            form the combination.
+          - Values: Sorted lists of items that are present in *all* sublists 
+            of the given combination, but absent from every other sublist 
+            outside the combination.
     """
     num_modalities = len(indexes_list)
     combination_dict = {}
@@ -358,14 +406,25 @@ def multimodal_dataset_split(
     paired_only: bool = False,
     random_seed: int = None
 ) -> tuple[dict[int, list[Any]], dict[int, list[Any]]]:
-    """
-    Generate train/test splits for multi-modal datasets.
+    """Generate train/test splits for multi-modal datasets.
+
+    This function splits a multi-modal dataset into training and testing sets, 
+    ensuring that samples shared across modalities are handled consistently
+    in the split. The splitting can be stratified based on class labels.
 
     Args:
-        indexes_list (list[list[str | int]]): 
-            A list of sublists, where each sublist contains sample identifiers 
-            corresponding to a given modality or group.
-        test_ratio: The proportion of samples to allocate to the test set (default: 0.2).
+        indexes_list: A list of sublists, where each sublist contains sample 
+            identifiers corresponding to a given modality.
+        test_ratio (float, optional): The proportion of samples to allocate to the 
+            test set. Defaults to 0.2.
+        stratify_by (list[list[int]], optional): A list of lists, where each 
+            inner list contains the class labels for the corresponding modality's
+            samples. This ensures the class distribution is maintained in the splits.
+            Defaults to None.
+        paired_only (bool, optional): If True, only considers samples present in 
+            all modalities for the split. Defaults to False.
+        random_seed (int, optional): A seed for the random number generator.
+            Defaults to None.
 
     Returns:
         A tuple containing two dictionaries:
@@ -373,6 +432,10 @@ def multimodal_dataset_split(
           and lists of training sample IDs for that modality as values.
         - The second dictionary (`test_samples_per_modality`) has modality indices as keys
           and lists of testing sample IDs for that modality as values.
+    
+    Raises:
+        ValueError: If `test_ratio` is not between 0 and 1, or if `stratify_by`
+            has an incorrect length or mismatched inner list lengths.
     """
     if not 0 <= test_ratio <= 1:
         raise ValueError("test_ratio must be between 0 and 1")
@@ -451,15 +514,28 @@ def multimodal_dataset_split(
     return train_samples_per_modality, test_samples_per_modality
 
 def stratified_k_fold(k: int, datasets: list[torch.utils.data.Dataset], sample_ids: list[str|int] | None, random_seed: int | None = None) -> list[list[str]]:
-    """
-    Generator that returns stratified k folds of train and test datasets for a multi-modal dataset
+    """Generator for stratified k-fold cross-validation on multi-modal datasets.
+
+    This generator yields pairs of training and testing datasets for each fold, 
+    ensuring that the class distribution and sample pairing are maintained across
+    modalities.
 
     Args:
-        k (int): Number of folds to divide each dataset into
-        datastes (list[torch.utils.data.Dataset]): Input dataset
-        sample_ids (list[str|int] | None): List of sample ids for paired or partially paired datasets
-                                           Use None if unpaired
-        random_seed (int): Seed for reproducibility
+        k: The number of folds to divide the dataset into. Must be >= 2.
+        datasets: A list of PyTorch `Dataset` objects, one for each modality.
+        sample_ids (list[str|int] | None): 
+            A list of sample identifiers. Each inner list corresponds to a modality. 
+            Used for ensuring sample pairing. If None, samples are assumed to be
+            unpaired.
+        random_seed (int, optional): A seed for reproducibility. Defaults to None.
+    
+    Yields:
+        A tuple of two lists of `Subset` objects:
+        - The first list represents the training datasets for the current fold.
+        - The second list represents the testing datasets for the current fold.
+    
+    Raises:
+        AssertionError: If `k` is less than 2.
     """
     assert k >= 2, "K-fold cross-validation requires k >= 2"
 

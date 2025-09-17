@@ -6,7 +6,19 @@ import torch
 from omegaconf import OmegaConf, DictConfig, ListConfig
 
 def flatten_omegaconf(config, parent_key='') -> dict:
-    """Return the config as flatten dict"""
+    """Return the config as a flattened dict.
+
+    This function recursively flattens a nested OmegaConf object (DictConfig or
+    ListConfig) into a single-level dictionary. Nested keys are represented
+    using dot notation (e.g., 'parent.child.key').
+
+    Args:
+        config: The OmegaConf object (DictConfig or ListConfig) to flatten.
+        parent_key: The base key for the current level of recursion.
+
+    Returns:
+        A dictionary with flattened keys and their corresponding values.
+    """
     items = {}
     if isinstance(config, DictConfig):
         for k, v in config.items():
@@ -25,7 +37,19 @@ def flatten_omegaconf(config, parent_key='') -> dict:
     return items
 
 def validate_config(config: DictConfig) -> None:
-    """Validate a configuration"""
+    """Validate a configuration.
+
+    This function checks a DictConfig object for all required fields and
+    validates the values for various parameters, such as data types, ranges,
+    and dependencies between fields (e.g., 'num_classes' for 'supervised' mode).
+    It will exit the program if any validation fails.
+
+    Args:
+        config: The configuration object to validate.
+
+    Raises:
+        SystemExit: If any validation rule is not met.
+    """
     error = None
     
     # Required fields validation
@@ -123,6 +147,20 @@ def validate_config(config: DictConfig) -> None:
         config.device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def set_param(config, param_name, param_value):
+    """Set a specific parameter in a configuration.
+    
+    This function updates the value of a parameter within an OmegaConf object.
+    It supports both simple top-level parameters and nested parameters using
+    dot notation (e.g., 'modalities.0.input_size').
+
+    Args:
+        config: The configuration object to modify.
+        param_name: The name of the parameter to set. Can be nested.
+        param_value: The new value for the parameter.
+    
+    Raises:
+        KeyError: If the parameter name does not exist in the configuration.
+    """
     if '.' in param_name:
         if OmegaConf.select(config, param_name) is None:
             raise KeyError(f"Parameter '{param_name}' does not exist in configuration")
@@ -133,22 +171,27 @@ def set_param(config, param_name, param_value):
         config[param_name] = param_value
         
 def generate_grid(base_config_file: pathlib.Path, params: dict):
-    """
-    Generate a grid of configurations from a base config and parameter variations.
+    """Generate a grid of configurations from a base config and parameter variations.
     
+    This function creates multiple configuration objects, each representing a
+    unique combination of parameter values from a provided dictionary. It loads
+    a base configuration file and then applies the parameter variations,
+    validating each new configuration before adding it to the grid.
+
     Args:
-        base_config_file: Path to the base configuration file
-        params: Dictionary of parameters to vary. Keys can be:
-                - Simple keys: 'latent_size'
-                - Nested keys: 'modalities.0.encoder_ratios'
-                Values should be lists of possible param values.
+        base_config_file: Path to the base configuration file.
+        params: A dictionary of parameters to vary. Keys can be simple or
+            nested (e.g., 'latent_size' or 'modalities.0.encoder_ratios'). Values
+            should be lists of possible parameter values.
     
     Returns:
-        List of OmegaConf DictConfig objects, each representing one parameter combination
-    
+        A list of OmegaConf DictConfig objects, each representing one
+        parameter combination.
+
     Raises:
-        FileNotFoundError: If base config file doesn't exist
-        ValueError: If parameters are not provided or the config file fails to load
+        FileNotFoundError: If the base config file does not exist.
+        ValueError: If the parameters dictionary is empty or the base
+            config file fails to load.
     """
     from modis.utils.io import load_config
 
@@ -182,7 +225,21 @@ def generate_grid(base_config_file: pathlib.Path, params: dict):
     return grid
 
 def config_from_dict(config_dict: dict) -> DictConfig:
-    """Create a configuration from config file"""
+    """Create a configuration from a dictionary.
+
+    This function converts a standard Python dictionary into an OmegaConf
+    DictConfig object and then validates it using the `validate_config`
+    function.
+
+    Args:
+        config_dict: The dictionary to convert into a configuration.
+
+    Returns:
+        A validated OmegaConf DictConfig object.
+
+    Raises:
+        SystemExit: If the dictionary fails validation.
+    """
     config = OmegaConf.create(config_dict)
     validate_config(config)
     return config

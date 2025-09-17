@@ -10,11 +10,32 @@ from modis.utils.io import load_config
 from modis.utils.data import get_dataloaders
 
 def accuracy(logits, target):
+    """Calculates the accuracy of model predictions.
+
+    Args:
+        logits (torch.Tensor): The model's raw output predictions.
+        target (torch.Tensor): The true labels.
+
+    Returns:
+        float: The accuracy of the predictions.
+    """
     pred = logits.argmax(dim=1).view(-1)
     correct = pred.eq(target.view(-1)).sum().item()
     return correct / logits.size(0)
 
-def calc_classification_metrics(true_labels, pred_labels): # : np.ndarray?
+def calc_classification_metrics(true_labels, pred_labels):
+    """Calculates various classification metrics.
+
+    Args:
+        true_labels (np.ndarray): The ground truth labels.
+        pred_labels (np.ndarray): The predicted labels.
+
+    Returns:
+        dict: A dictionary containing the calculated metrics:
+              'acc' (accuracy), 'bacc' (balanced accuracy), 'nmi'
+              (normalized mutual information), 'ji' (Jaccard index),
+              'ari' (Adjusted Rand Index), and 'f1' (F1-score).
+    """
     cm = confusion_matrix(true_labels, pred_labels)
     acc = np.trace(cm) / np.sum(cm)
 
@@ -41,7 +62,21 @@ def calc_classification_metrics(true_labels, pred_labels): # : np.ndarray?
     }
 
 def evaluate_model(model, dataloaders) -> dict:
-    """Validate the model on labeled samples"""
+    """Validates the model on labeled samples.
+
+    This function iterates through the provided dataloaders, computes predictions
+    and reconstruction losses for labeled samples, and aggregates the results
+    to calculate various classification and reconstruction metrics.
+
+    Args:
+        model: The trained model to evaluate.
+        dataloaders (list): A list of PyTorch DataLoaders, one for each
+            modality, containing the data to be evaluated.
+
+    Returns:
+        dict: A dictionary containing the evaluation metrics. An empty
+              dictionary is returned if no labeled samples are found.
+    """
     device = model.device
     mse_loss = torch.nn.MSELoss()
 
@@ -100,6 +135,20 @@ def evaluate_checkpoint(
     val_dataloaders,
     metrics_data: dict
 ) -> None:
+    """Evaluates a model loaded from a specified checkpoint.
+
+    This function loads a model from a checkpoint file and evaluates its
+    performance on both the training and validation datasets. The results are
+    printed to the console and stored in a metrics dictionary.
+
+    Args:
+        config (DictConfig): The model's configuration.
+        checkpoint_dir (Path): The directory containing the checkpoint file.
+        checkpoint_opt (str): The name of the checkpoint ('best' or 'latest').
+        train_dataloaders (list): A list of dataloaders for the training data.
+        val_dataloaders (list): A list of dataloaders for the validation data.
+        metrics_data (dict): A dictionary to store the evaluation results.
+    """
     from modis import Model
 
     model = Model(config)
@@ -130,6 +179,18 @@ def launch_checkpoints_evaluation(
     val_datasets,
     checkpoint_dir: Path,
 ) -> None:
+    """Launches the evaluation of the latest and best model checkpoints.
+
+    This function loads the model's configuration and then, based on the
+    `save_checkpoint_latest` and `save_checkpoint_best` flags, calls
+    `evaluate_checkpoint` for each enabled checkpoint. Finally, it saves the
+    evaluation metrics to a JSON file.
+
+    Args:
+        train_datasets (list): A list of PyTorch Datasets for the training data.
+        val_datasets (list): A list of PyTorch Datasets for the validation data.
+        checkpoint_dir (Path): The directory where the checkpoints are saved.
+    """
     metrics_data = {'latest': dict(), 'best': dict()}
 
     config = load_config(checkpoint_dir / 'config.yaml')
@@ -155,7 +216,18 @@ def launch_checkpoints_evaluation(
         print(f"Error saving evaluation metrics file: {e}")
 
 def avg_mse_all_pairs(X, X_hat):
-    """Computes the average MSE between all pairs of vectors from X and X_hat"""
+    """Computes the average MSE between all pairs of vectors from X and X_hat.
+
+    This function uses broadcasting to efficiently calculate the mean squared
+    error between every vector in `X` and every vector in `X_hat`.
+
+    Args:
+        X (torch.Tensor): The first tensor of vectors.
+        X_hat (torch.Tensor): The second tensor of vectors.
+
+    Returns:
+        float: The average MSE across all pairs.
+    """
     differences = X[:, None, :] - X_hat[None, :, :]  # Broadcast to [n_samples_X, n_samples_X_hat, n_features]
     mse_matrix = torch.mean(differences ** 2, dim=2)  # Averaging over the feature axis (dim=2)
     return mse_matrix.mean().item()

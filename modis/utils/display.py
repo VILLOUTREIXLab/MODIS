@@ -1,12 +1,15 @@
 def adjust_time(seconds: int) -> str:
-    """
-    Converts a given number of seconds into a more appropriate time unit
+    """Converts a given number of seconds into a more appropriate time unit.
+
+    The function automatically selects the most convenient unit (nanoseconds,
+    microseconds, milliseconds, seconds, minutes, hours, or days) to
+    represent the given duration.
 
     Args:
         seconds (int): The number of seconds to be converted.
 
-    Return:
-        (str): A string representing the time duration in a more convenient unit.
+    Returns:
+        A string representing the time duration in a more convenient unit.
     """
     if seconds < 1e-6:
         return f"{seconds * 1e9:.2f} ns"

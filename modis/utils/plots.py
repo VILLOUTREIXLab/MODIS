@@ -27,7 +27,24 @@ def plot_training_log(
     save_plot: bool = False,
     figsize: tuple = (15, 10)
 ) -> None:
-    """Plot training log"""
+    """Plot training log.
+
+    This function plots various training metrics (losses, accuracies) from a
+    saved training log file. It displays multiple subplots for different metrics
+    over the training epochs.
+
+    Args:
+        training_mode: The training mode, e.g., 'semisupervised'.
+        modality_names: A list of names for each modality.
+        checkpoint_dir: Path to the directory containing the training log.
+        use_best: If True, uses the log from the best checkpoint; otherwise,
+            uses the latest.
+        save_plot: If True, saves the plot to a file; otherwise, displays it.
+        figsize: A tuple specifying the figure size.
+
+    Raises:
+        FileNotFoundError: If the checkpoint directory or log file does not exist.
+    """
     from modis import load_log  # Import here to avoid partially initialized module error 
 
     if not checkpoint_dir.exists():
@@ -165,7 +182,15 @@ colors = [
 ]
 
 def get_colors(n=5) -> list[str]:
-    """Return a list of hexadecimal color codes """
+    """Return a list of hexadecimal color codes.
+
+    Args:
+        n: The number of colors to return. If n is greater than the
+            predefined list, a rainbow colormap is used.
+
+    Returns:
+        A list of hexadecimal color strings.
+    """
     # assert n <= len(colors), f"Only {len(colors)} available"
     if n > len(colors):
         import matplotlib.colors as mcolors
@@ -175,15 +200,14 @@ def get_colors(n=5) -> list[str]:
     return colors[:n]
 
 def generate_colors(hex_color:str, n:int):
-    """
-    Generate n versions of the hue in hex_color by changing the lightness and saturation
+    """Generate n versions of a given hue by changing lightness and saturation.
 
     Args:
-        hex_color (str): Color in hex format
-        n (int): Number of colors to generate
+        hex_color: The base color in hexadecimal format.
+        n: The number of colors to generate.
 
-    Return:
-        (list): List of generated colors
+    Returns:
+        A list of generated color strings in hexadecimal format.
     """
     def hex_to_rgb(hex):
         return tuple(int(hex[i:i+2], 16) / 255.0 for i in (1, 3, 5))
@@ -220,7 +244,16 @@ def generate_colors(hex_color:str, n:int):
     return colors
 
 def get_class_per_modality_colors(num_modalities, num_classes):
-    """Return a list of colors per modality per class"""
+    """Return a list of colors per modality per class.
+
+    Args:
+        num_modalities: The number of modalities.
+        num_classes: The number of classes.
+
+    Returns:
+        A list of color strings, where each color corresponds to a unique
+        class-modality pair.
+    """
     class_colors = get_colors(num_classes)
     colors_per_modality = list(zip(*[generate_colors(color, num_modalities) for color in class_colors]))
     colors = [color for modality_color in colors_per_modality for color in modality_color]
@@ -242,13 +275,33 @@ def plot_2d_projection(
     alt_save_dir: pathlib.Path = None,
     alt_filename: str = None
 ) -> None:
-    """
-    Display and save a 2D PCA or UMAP plot
-    
+    """Display and save a 2D PCA or UMAP plot.
+
     Args:
-        technique (str): Choose between 'pca' or 'umap' dimensionality reduction technique
-        labels_colors (None | list[str]): One hex color code for each unique class label
-        labels_names (None | list[str]): One name for each unique class label
+        technique: The dimensionality reduction technique to use ('pca' or 'umap').
+        data: The input data to be reduced and plotted.
+        labels: The labels for each data point.
+        labels_colors: An optional list of hex color codes for each unique label.
+        labels_names: An optional list of names for each unique label.
+        standardize: Whether to standardize the data before dimensionality reduction.
+        checkpoint_dir: The directory to save the plot to, if `save_plot` is True.
+        is_train: Indicates whether the data is from the training set. Required
+            if `save_plot` is True.
+        is_best: Indicates whether the plot corresponds to the best checkpoint.
+            Required if `save_plot` is True.
+        save_plot: If True, saves the plot to a file; otherwise, displays it.
+        figsize: A tuple specifying the figure size.
+        text_size: The font size for text elements in the plot.
+        alt_save_dir: An alternative directory to save the plot. Overrides
+            `checkpoint_dir` if provided.
+        alt_filename: An alternative filename for the saved plot. Overrides
+            the default naming convention.
+
+    Raises:
+        ValueError: If `technique` is not 'pca' or 'umap', or if `is_train` or
+            `is_best` is not a boolean when `save_plot` is True.
+        FileNotFoundError: If `checkpoint_dir` does not exist when `save_plot`
+            is True.
     """
     if save_plot:
         if not checkpoint_dir.exists():
@@ -352,16 +405,28 @@ def plot_3d_projection(
     width: int = 800,
     height: int = 800
 ) -> None:
-    """
-    Display and save a 3D dimensionality reduction plot
+    """Display and save a 3D dimensionality reduction plot.
     
     Args:
-        technique (str): Choose between 'pca' or 'umap' dimensionality reduction technique
-        labels_colors (None | list[str]): List of colors for each unique label
-        labels_names (None | list[str]): List of names for each unique label
-        standardize (boolean): Whether to standardize the data before reduction
-        width (int): Width of the plot
-        height (int): Height of the plot
+        technique: The dimensionality reduction technique to use ('pca' or 'umap').
+        data: The input data to be reduced and plotted.
+        labels: The labels for each data point.
+        labels_colors: An optional list of colors for each unique label.
+        labels_names: An optional list of names for each unique label.
+        standardize: Whether to standardize the data before reduction.
+        checkpoint_dir: The directory to save the plot to, if `save_plot` is True.
+        is_train: Indicates whether the data is from the training set. Required
+            if `save_plot` is True.
+        is_best: Indicates whether the plot corresponds to the best checkpoint.
+        save_plot: If True, saves the plot to a file; otherwise, displays it.
+        width: The width of the plot in pixels.
+        height: The height of the plot in pixels.
+
+    Raises:
+        ValueError: If `technique` is not 'pca' or 'umap', or if `is_train` is
+            not a boolean when `save_plot` is True.
+        FileNotFoundError: If `checkpoint_dir` does not exist when `save_plot`
+            is True.
     """
     if save_plot:
         if not checkpoint_dir.exists():
@@ -468,15 +533,31 @@ def plot_confusion_matrix(
     filename_suffix: str | None = None,
     alt_save_dir: pathlib.Path = None
 ) -> None:
-    """
-    Display a confusion matrix.
+    """Display a confusion matrix.
 
-    Note: If there are many classes adjust figsize to fix recall and precision plots, add n to each
-    
+    This function plots a confusion matrix along with optional precision and
+    recall plots and classification metrics.
+
     Args:
-        true_labels (array-like of shape (n_samples,))
-        pred_labels (array-like of shape (n_samples,))
-        performance_metrics: if True, plot recall and precision plots
+        true_labels: Array-like of shape (n_samples,) with true labels.
+        pred_labels: Array-like of shape (n_samples,) with predicted labels.
+        performance_metrics: If True, plots recall and precision as well.
+        checkpoint_dir: The directory to save the plot to, if `save_plot` is True.
+        is_train: Indicates whether the data is from the training set. Required
+            if `save_plot` is True.
+        is_best: Indicates whether the plot corresponds to the best checkpoint.
+        save_plot: If True, saves the plot to a file; otherwise, displays it.
+        figsize: A tuple specifying the figure size.
+        text_size: The font size for text elements in the plot.
+        filename_suffix: An optional suffix to append to the filename.
+        alt_save_dir: An alternative directory to save the plot. Overrides
+            `checkpoint_dir` if provided.
+
+    Raises:
+        ValueError: If `is_train` or `is_best` is not a boolean when `save_plot`
+            is True.
+        FileNotFoundError: If `checkpoint_dir` does not exist when `save_plot`
+            is True.
     """
     if save_plot:
         if not checkpoint_dir.exists():
@@ -590,7 +671,28 @@ def checkpoint_report_plots(
     use_best: bool = True,
     num_samples: int | None = None
 ) -> None:
-    """Save checkpoint log, 2D pca, and confusion matrices"""
+    """Save checkpoint log, 2D pca, and confusion matrices.
+
+    This function generates and saves a series of plots to a specified
+    checkpoint directory, including a training log plot, 2D and 3D PCA
+    projections of the latent space, and various confusion matrices.
+
+    Args:
+        checkpoint_dir: The path to the directory containing the model
+            checkpoint and configuration files.
+        datasets: A list of `torch.utils.data.Dataset` objects, one for each
+            modality.
+        is_train: A boolean indicating whether to generate plots for the
+            training or validation set.
+        use_best: A boolean indicating whether to use the 'best' or 'latest'
+            checkpoint file.
+        num_samples: An optional integer specifying the number of samples
+            to use for plotting. If None, all samples are used.
+
+    Raises:
+        NotADirectoryError: If the checkpoint path does not exist.
+        FileNotFoundError: If the specified checkpoint file does not exist.
+    """
     config = load_config(checkpoint_dir / 'config.yaml')
     checkpoint_file = checkpoint_dir / f"{'checkpoint_best.pth' if use_best else 'checkpoint_latest.pth'}"
     num_modalities = len(config.modalities)
@@ -741,6 +843,26 @@ def calc_reconstruction_and_translation_mse(
     vmin: float = 0,
     vmax: float = 0.1
 ):
+    """Calculates and plots a heat map of reconstruction and translation MSE.
+
+    This function computes the mean squared error (MSE) between original data
+    and its reconstructed/translated versions across all modalities and plots
+    the results as a heat map.
+
+    Args:
+        x: A list of `torch.Tensor` objects, where each tensor contains data
+            for one modality.
+        model: The trained model used for reconstruction and translation.
+        save_plot: If True, saves the plot to a file; otherwise, displays it.
+        save_dir: The directory to save the plot to, if `save_plot` is True.
+        suffix: An optional suffix to append to the filename.
+        text_size: The font size for text elements in the plot.
+        vmin: The minimum value for the color scale of the heat map.
+        vmax: The maximum value for the color scale of the heat map.
+
+    Raises:
+        FileNotFoundError: If `save_dir` does not exist when `save_plot` is True.
+    """
     if save_plot:
         if not save_dir.exists():
             raise FileNotFoundError(f"Checkpoint dir {save_dir} doesn't exist.")
