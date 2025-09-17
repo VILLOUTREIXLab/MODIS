@@ -11,5 +11,5 @@ train_datasets = get_datasets(
 )
 
 # Train model
-config_file = 'config/supervised.yaml'
-modis.train(config_file=config_file, train_datasets=train_datasets)
+config = modis.load_config('config/supervised.yaml')
+modis.train(config=config, train_datasets=train_datasets)

@@ -21,8 +21,9 @@ train_datasets = [PartiallyLabeledDataset(dataset, labeled_ratio=0.2, random_see
                   for dataset in train_datasets]
 
 # Train model
+config = modis.load_config('config/semisupervised.yaml')
 modis.train(
-    config_file='config/semisupervised.yaml',
+    config_file=config,
     train_datasets=train_datasets,
     val_datasets=val_datasets
 )
