@@ -1,3 +1,17 @@
+"""
+This module contains the `Trainer` class, which orchestrates the training
+process for the multi-modal model. It handles the optimization loops,
+calculates various loss functions, and manages model checkpoints.
+
+The `Trainer` class is responsible for:
+    - Initializing the model, optimizers, and loss functions.
+    - Implementing the training loop for both the VAEs (generators) and
+      the Discriminator.
+    - Calculating and backpropagating loss, including reconstruction,
+      KL divergence, adversarial (relativistic), auxiliary, and clustering losses.
+    - Saving and loading model and optimizer states for checkpointing.
+    - Performing a single training step.
+"""
 import json
 import pathlib
 
@@ -10,6 +24,12 @@ from modis.utils.evaluation import accuracy
 
 
 class Trainer:
+    """
+    Manages the training and checkpointing process for the multi-modal model.
+
+    Args:
+        config (omegaconf.DictConfig): The training configuration object.
+    """
 
     def __init__(self, config):
         self.model = Model(config)
@@ -50,6 +70,24 @@ class Trainer:
         is_best: bool = False,
         verbose: bool = True
     ) -> pathlib.Path:
+        """
+        Saves the model and optimizer states to a checkpoint file.
+
+        Args:
+            epoch (int): The current epoch number.
+            best_epoch (int): The epoch number of the best performing model.
+            best_loss (float): The lowest generator loss achieved so far.
+            val_acc (float): The validation accuracy of the best model.
+            timestamp (str): The timestamp of the training run.
+            config (omegaconf.DictConfig): The training configuration.
+            log (list): The list of training logs.
+            save_path (pathlib.Path): The base directory to save checkpoints.
+            is_best (bool): If True, saves as the best checkpoint.
+            verbose (bool): If True, prints a message upon saving.
+
+        Returns:
+            pathlib.Path: The path to the saved checkpoint file.
+        """
 
         checkpoint_data = {
             'epoch': epoch,
@@ -86,11 +124,27 @@ class Trainer:
         return checkpoint_file
     
     def load_model_and_optimizer_states(self, checkpoint_data: dict) -> None:
+        """
+        Loads the model and optimizer states from a checkpoint dictionary.
+
+        Args:
+            checkpoint_data (dict): The dictionary containing the saved states.
+        """
         self.model.load_state_dict(checkpoint_data['model_state'])
         self.optimizer.load_state_dict(checkpoint_data['optimizer_state'])
         print(f"Loaded state from checkpoint")
 
     def zero_centered_gradient_penalty(self, x: torch.Tensor, modality_index: int) -> torch.Tensor:
+        """
+        Calculates the zero-centered gradient penalty for the discriminator.
+
+        Args:
+            x (torch.Tensor): The input samples for the specified modality.
+            modality_index (int): The index of the modality.
+
+        Returns:
+            torch.Tensor: The calculated gradient penalty.
+        """
         modal_samples = x.detach().requires_grad_(True)
 
         # Logits from discriminator
@@ -103,6 +157,19 @@ class Trainer:
         return penalty
 
     def train_step(self, x, y, is_labeled):
+        """
+        Performs a single training step for both the VAEs and the Discriminator.
+
+        Args:
+            x (list[torch.Tensor]): A list of tensors, each containing samples
+                                    for a specific modality.
+            y (list[torch.Tensor]): A list of tensors with labels for each modality.
+            is_labeled (list[torch.Tensor]): A list of boolean tensors indicating
+                                             which samples are labeled.
+
+        Returns:
+            dict: A dictionary of metrics for the current training step.
+        """
         num_modalities = len(x)
         device = self.config.device
         metrics = {
