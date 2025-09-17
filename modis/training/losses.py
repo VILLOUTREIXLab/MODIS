@@ -1,14 +1,30 @@
+"""
+This module provides various loss functions for training MODIS,
+including a Deep Divergence-Based Clustering (DDC) loss and an entropy
+regularization loss.
+
+The key components are:
+    - `DDCLoss`: Implements the DDC loss, which is used to encourage
+      compact and separable clusters in the latent space.
+    - `EntropyLoss`: A regularization loss that prevents the model from
+      assigning all samples to a single cluster.
+    - `ClusteringLoss`: A combined loss that sums the DDC loss and the
+      entropy regularization loss for the main clustering objective.
+"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 class DDCLoss(nn.Module):
     """
-    Calculate the DDC loss (Deep Divergence-Based Approach to Clustering)
+    Calculate the DDC loss (Deep Divergence-Based Approach to Clustering).
 
-    Reconsidering Representation Alignment for Multi-View Clustering
-    Trosten et al., 2021.
-    https://doi.org/10.1109/CVPR46437.2021.00131.
+    This loss function, inspired by "Reconsidering Representation Alignment
+    for Multi-View Clustering" by Trosten et al. (2021), encourages both
+    compactness and separability of clusters in the latent space.
+
+    Attributes:
+        epsilon (float): A small value added for numerical stability.
     """
 
     def __init__(self):
@@ -18,13 +34,14 @@ class DDCLoss(nn.Module):
     @staticmethod
     def kernel_matrix(x, epsilon=1e-9):
         """
-        Compute a Gaussian kernel matrix
+        Compute a Gaussian kernel matrix.
 
         Args:
-            x (torch.Tensor): Hidden layer logits (n_samples x n_features)
+            x (torch.Tensor): Hidden layer logits (n_samples x n_features).
+            epsilon (float): A small value for numerical stability.
         
-        Return:
-            (torch.Tensor): Kernel matrix (n_samples x n_samples)
+        Returns:
+            torch.Tensor: The kernel matrix (n_samples x n_samples).
         """
         distances = F.relu(torch.cdist(x, x, p=2)**2)
 
@@ -40,11 +57,11 @@ class DDCLoss(nn.Module):
         Calculate the d component of the Cauchy-Schwarz (CS) divergence.
         
         Args:
-            A (torch.Tensor): Cluster assignments or m matrix (n_samples x n_clusters)
-            K (torch.Tensor): Similarity matrix (n_samples x n_samples)
+            A (torch.Tensor): Cluster assignments or m matrix (n_samples x n_clusters).
+            K (torch.Tensor): Similarity matrix (n_samples x n_samples).
         
-        Return:
-            (torch.Tensor): d value
+        Returns:
+            torch.Tensor: The d value of the CS divergence.
         """
         n_clusters = A.size(1)
 
@@ -60,13 +77,16 @@ class DDCLoss(nn.Module):
 
     def calculate_m(self, A):
         """
-        Calculate the m matrix for the DDC loss
+        Calculate the m matrix for the DDC loss.
         
+        The m matrix pushes the cluster assignment vectors close to the
+        standard simplex, encouraging more even cluster assignments.
+
         Args:
-            A (torch.Tensor): Cluster assignments logits (n_samples x n_clusters)
+            A (torch.Tensor): Cluster assignments logits (n_samples x n_clusters).
         
-        Return:
-            (torch.Tensor): m matrix (n_samples x n_clusters)
+        Returns:
+            torch.Tensor: The m matrix (n_samples x n_clusters).
         """
         n_clusters = A.size(1)
         e = torch.eye(n_clusters, device=A.device)
@@ -75,14 +95,16 @@ class DDCLoss(nn.Module):
 
     def forward(self, hidden_layer, aux_layer):
         """
-        Compute the DDC loss
+        Compute the DDC loss.
 
         Args:
-            hidden_layer (torch.Tensor): Logits from the hidden layer previous to output (n_samples x n_features)
-            aux_layer (torch.Tensor): Logits of output layer (cluster assignments) (n_samples x n_clusters)
+            hidden_layer (torch.Tensor): Logits from the hidden layer previous
+                                         to output (n_samples x n_features).
+            aux_layer (torch.Tensor): Logits of the output layer (cluster
+                                      assignments) (n_samples x n_clusters).
         
-        Return:
-            (torch.Tensor): DDC loss value
+        Returns:
+            torch.Tensor: The DDC loss value.
         """
         n_samples, n_clusters = aux_layer.shape
         if hidden_layer.shape[0] != n_samples:
@@ -105,7 +127,14 @@ class DDCLoss(nn.Module):
 
 class EntropyLoss(nn.Module):
     """
-    Computes the entropy regularization to avoid the assignment of only a subset of the total clusters
+    Computes the entropy regularization to avoid the assignment of only a subset
+    of the total clusters.
+
+    This loss encourages a more uniform distribution of samples across clusters,
+    preventing degenerate solutions where a single cluster dominates.
+
+    Attributes:
+        eps (float): A small value for numerical stability.
     """
 
     def __init__(self):
@@ -113,6 +142,15 @@ class EntropyLoss(nn.Module):
         self.eps = 1e-9
 
     def forward(self, logits):
+        """
+        Calculates the entropy loss.
+
+        Args:
+            logits (torch.Tensor): Logits from the output layer.
+
+        Returns:
+            torch.Tensor: The calculated entropy loss.
+        """
         out_prob = F.softmax(logits, dim=1)
         
         prob_mean = out_prob.mean(dim=0)
@@ -124,7 +162,15 @@ class EntropyLoss(nn.Module):
 
 class ClusteringLoss(nn.Module):
     """
-    Computes the entropy regularization to avoid the assignment of only a subset of the total clusters
+    Combines the DDC loss and entropy regularization loss.
+    
+    This class provides a comprehensive loss function for clustering,
+    balancing the goals of creating compact, separable clusters with a
+    uniform distribution of samples across them.
+
+    Attributes:
+        ddc_loss (DDCLoss): An instance of the DDCLoss module.
+        entropy_loss (EntropyLoss): An instance of the EntropyLoss module.
     """
 
     def __init__(self):
@@ -133,5 +179,15 @@ class ClusteringLoss(nn.Module):
         self.entropy_loss = EntropyLoss()
 
     def forward(self, aux_layer, hidden_layer):
+        """
+        Computes the total clustering loss.
+
+        Args:
+            aux_layer (torch.Tensor): Logits from the output layer.
+            hidden_layer (torch.Tensor): Logits from the hidden layer.
+
+        Returns:
+            torch.Tensor: The combined DDC and entropy loss.
+        """
         loss = self.ddc_loss(hidden_layer, aux_layer) + self.entropy_loss(aux_layer)
         return loss
