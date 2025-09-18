@@ -121,7 +121,7 @@ class VAE(nn.Module):
 
         Returns:
             tuple[torch.Tensor, torch.Tensor]: A tuple containing the mean (mu)
-                                               and log variance (logvar).
+            and log variance (logvar).
         """
         out = x.view(x.size(0), -1)
         out = self.encoder(out)
@@ -160,7 +160,7 @@ class VAE(nn.Module):
 
         Returns:
             tuple: A tuple containing the reconstructed data, mean, log variance,
-                   and latent sample.
+            and latent sample.
         """
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
@@ -177,8 +177,7 @@ class Discriminator(nn.Module):
 
     Args:
         latent_size (int): The dimensionality of the input latent space.
-        num_modalities (int): The number of modalities, used for the adversarial
-                              layer's output size.
+        num_modalities (int): The number of modalities, used for the adversarial layer's output size.
         num_classes (int): The number of classes for the auxiliary classifier.
     """
 
@@ -208,7 +207,7 @@ class Discriminator(nn.Module):
 
         Returns:
             tuple: A tuple containing the adversarial output, auxiliary
-                   output, and the hidden layer output.
+            output, and the hidden layer output.
         """
         hidden = self.fc(z)
         adv_out = self.adv_layer(hidden)
@@ -221,14 +220,11 @@ class Discriminator(nn.Module):
 
         Args:
             z (torch.Tensor): A tensor of latent space samples.
-            include_modality_pred (bool): If True, also returns the modality
-                                          label prediction.
+            include_modality_pred (bool): If True, also returns the modality label prediction.
 
         Returns:
             torch.Tensor | tuple[torch.Tensor]: The predicted class labels, or
-                                                a tuple of class and modality
-                                                predictions if
-                                                ``include_modality_pred`` is True.
+            a tuple of class and modality predictions if ``include_modality_pred`` is True.
         """
         hidden = self.fc(z)
         aux_out = self.aux_layer(hidden)
@@ -251,9 +247,9 @@ class Model(nn.Module):
     representations.
 
     Args:
-        config (omegaconf.DictConfig): The configuration object for the model,
-                                        including details about modalities,
-                                        latent size, and device.
+        config (omegaconf.DictConfig): 
+            The configuration object for the model, including details about modalities,
+            latent size, and device.
     """
 
     def __init__(self, config):
@@ -288,10 +284,9 @@ class Model(nn.Module):
                                        to train the discriminator.
 
         Returns:
-            tuple: A tuple of outputs, which varies based on
-                   `discriminator_only`.
-                   - If True: Returns (d_adv, d_aux, d_hidden)
-                   - If False: Returns (recon_x, mu, logvar, d_adv, d_aux, d_hidden)
+            tuple: A tuple of outputs, which varies based on ``discriminator_only``.
+            - If True: Returns (d_adv, d_aux, d_hidden)
+            - If False: Returns (recon_x, mu, logvar, d_adv, d_aux, d_hidden)
         """
         if discriminator_only:
             latents = [self.get_latents(x[i], input_modality=i) for i in range(self.num_modalities)]
