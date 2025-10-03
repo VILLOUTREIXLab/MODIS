@@ -168,7 +168,7 @@ def summarize_dataset(dataloaders: list[torch.utils.data.DataLoader], modality_n
         assert isinstance(dataloader, torch.utils.data.DataLoader), f"You must provide a list of Pytorch DataLoaders"
 
         dataset = dataloader.dataset
-        class_counter = Counter([data[1] for data in dataset])
+        class_counter = Counter([data[1].tolist() if isinstance(data[1], torch.Tensor) else data[1] for data in dataset])
         total_samples = total_samples + class_counter
 
         sorted_class_counter = dict(sorted(class_counter.items()))
