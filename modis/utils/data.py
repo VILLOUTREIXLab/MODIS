@@ -117,6 +117,8 @@ class PartiallyLabeledDataset(Dataset):
         sample = self.dataset[index]
     
         if self.is_labeled[index]:
+            # Make sure all labels are the same type
+            sample = (sample[0], int(sample[1].item())) + sample[2:] if isinstance(sample[1], torch.Tensor) else sample
             return sample
         else:
             # Adjust sample label to -1 (to represent unlabeled)
