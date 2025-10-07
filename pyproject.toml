@@ -25,5 +25,5 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["modis"]
+include = ["modis", "modis.*"]
 where = ["."]
