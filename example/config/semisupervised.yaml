@@ -1,5 +1,5 @@
-dataset_name: intersim_2_delta
-model_name: intersim_semisupervised
+dataset_name: toy_dataset
+model_name: toy_semisupervised
 latent_size: 64
 modalities:
   - name: dna_methyl

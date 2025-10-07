@@ -1,13 +1,12 @@
 import modis
-from src.generate_dataset import get_datasets
+from src.datasets import get_datasets
 
 # Load the dataset
 train_datasets = get_datasets(
-    dataset_name = 'intersim_2_delta',
-    pairing = 'unpaired',
+    dataset_name = 'toy_dataset',
     split = 'train',
-    data_dir = './data',
-    include_sample_ids = False
+    include_ids = False,
+    data_dir = './data'
 )
 
 # Train model
