@@ -1,3 +1,9 @@
+"""
+I/O utilities for MODIS.
+
+This module provides helpers for loading checkpoints, training logs, and
+configuration files from disk.
+"""
 import json
 from pathlib import Path
 
@@ -6,34 +12,39 @@ from omegaconf import DictConfig, OmegaConf
 
 from modis.utils.config import validate_config
 
+
 def load_checkpoint(checkpoint_file: Path) -> dict:
-    """Loads a checkpoint from a specified file path.
+    """Load a model checkpoint from disk.
 
     Args:
-        checkpoint_file: Path to the checkpoint file.
+        checkpoint_file (pathlib.Path): Path to the ``.pth`` checkpoint file.
 
     Returns:
-        A dictionary containing the checkpoint data.
+        dict: Checkpoint dictionary containing at least ``'model_state'``,
+        ``'optimizer_state'``, ``'epoch'``, ``'best_epoch'``,
+        ``'best_loss'``, ``'val_acc'``, and ``'timestamp'``.
 
     Raises:
-        FileNotFoundError: If the checkpoint file does not exist.
+        FileNotFoundError: If ``checkpoint_file`` does not exist.
     """
     if not checkpoint_file.exists():
         raise FileNotFoundError(f"Checkpoint file {checkpoint_file} doesn't exist.")
     checkpoint = torch.load(checkpoint_file, map_location="cpu")
     return checkpoint
 
+
 def load_log(checkpoint_file: Path) -> list:
-    """Loads a log from a specified file path.
+    """Load a training log from a JSON file.
 
     Args:
-        checkpoint_file: Path to the log file.
+        checkpoint_file (pathlib.Path): Path to the JSON log file.
 
     Returns:
-        A list containing the log data.
+        list[dict]: List of per-epoch metric dictionaries, in chronological
+        order.
 
     Raises:
-        FileNotFoundError: If the log file does not exist.
+        FileNotFoundError: If ``checkpoint_file`` does not exist.
     """
     if not checkpoint_file.exists():
         raise FileNotFoundError(f"Log file {checkpoint_file} doesn't exist.")
@@ -41,14 +52,20 @@ def load_log(checkpoint_file: Path) -> list:
         log = json.load(file)
     return log
 
+
 def load_config(config_file: str) -> DictConfig:
-    """Loads a configuration from a config file.
+    """Load and validate a MODIS configuration from a YAML file.
 
     Args:
-        config_file: Path to the configuration file.
+        config_file (str or pathlib.Path): Path to the YAML configuration
+            file.
 
     Returns:
-        A DictConfig object containing the loaded and validated configuration.
+        omegaconf.DictConfig: The loaded and validated configuration object.
+
+    Raises:
+        SystemExit: If the configuration fails validation (see
+            :func:`~modis.utils.config.validate_config`).
     """
     config = OmegaConf.load(config_file)
     validate_config(config)

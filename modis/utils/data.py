@@ -1,3 +1,10 @@
+"""
+Dataset and dataloader utilities for MODIS.
+
+This module provides dataset wrappers, dataloader factories, and splitting
+helpers for single-modal and multi-modal datasets used in MODIS training and
+evaluation.
+"""
 import random
 from itertools import combinations
 from typing import Any
@@ -9,48 +16,47 @@ from torch.utils.data import Dataset, Subset
 
 
 class PartiallyLabeledDataset(Dataset):
-    """Adjust the labels in a labeled dataset for semisupervised mode with MODIS"""
+    """Dataset wrapper that restricts how many samples retain their labels.
+
+    Wraps an existing labeled dataset and sets a configurable subset of
+    labels to ``-1`` to simulate a semi-supervised scenario. Exactly one
+    of the ``labeled_*`` arguments should be provided.
+
+    Args:
+        dataset (torch.utils.data.Dataset): The source labeled dataset.
+        labeled_samples_ratio (float, optional): Fraction of samples (0–1)
+            that retain their labels, distributed uniformly at random.
+        labeled_samples (int, optional): Absolute number of samples that
+            retain their labels, chosen uniformly at random.
+        labeled_class_samples (int or list[int or None], optional): Fixed
+            number of labeled samples per class. Pass an integer to apply the
+            same count to all classes, or a list (one entry per class) to
+            specify per-class counts. ``None`` entries keep all samples for
+            that class.
+        labeled_class_samples_ratio (float or list[float or None], optional):
+            Same as ``labeled_class_samples`` but expressed as a fraction of
+            each class's total sample count.
+        num_random_samples (int, optional): Draw a random subset of this size
+            from the dataset before applying any labeling constraints.
+        remove_unlabeled (bool or list[int], optional): If ``True``, drops all
+            unlabeled samples from the dataset. If a list of class indices is
+            given, only unlabeled samples belonging to those classes are
+            removed. Defaults to ``False``.
+        random_seed (int, optional): Seed for the random number generator to
+            ensure reproducibility. Defaults to ``None``.
+    """
 
     def __init__(
         self,
         dataset,
         labeled_samples_ratio: float = None,
         labeled_samples: int = None,
-        labeled_class_samples: int | list[int|None] = None,
-        labeled_class_samples_ratio: float | list[float|None] = None,
+        labeled_class_samples=None,
+        labeled_class_samples_ratio=None,
         num_random_samples: int = None,
-        remove_unlabeled: bool| list[int] = False,
-        random_seed: int | None = None
+        remove_unlabeled=False,
+        random_seed: int = None,
     ) -> None:
-        """Adjust the number of samples that retain their labels.
-
-        Remaining labels are set to -1 to denote unlabeled samples.
-
-        Args:
-            dataset: The dataset to modify.
-            labeled_samples_ratio (float, optional): 
-                Ratio (0–1) of labeled samples randomly distributed across
-                classes relative to unlabeled samples in the dataset.
-            labeled_samples (int, optional):
-                Number of samples to retain labels, randomly distributed
-                across classes.
-            labeled_class_samples (int | list, optional):
-                Fixed number of labeled samples per class. If an integer,
-                applies to all classes; if a list (matching the number of
-                classes), specifies labeled samples per class.
-            labeled_class_samples_ratio (float | list, optional):
-                Same as labeled_class_samples, but specifies the ratio (0 to 1)
-                of labeled samples per class.
-            num_random_samples (int, optional):
-                Generate a subset with this number of samples; previous 
-                parameters apply to this subset.
-            remove_unlabeled (bool | list, optional): 
-                If True, all unlabeled samples are removed; if a list,
-                unlabeled samples from the specified classes are removed.
-            random_seed (int, optional):
-                Integer seed to ensure reproducible random operations
-                across runs.
-        """
         if random_seed is not None:
             rng = np.random.default_rng(seed=random_seed)
             random.seed(random_seed)
@@ -60,8 +66,9 @@ class PartiallyLabeledDataset(Dataset):
         self.dataset = dataset
 
         if num_random_samples is not None:
-            assert num_random_samples <= len(dataset), f"Dataset only has {len(dataset)} samples"
-            random_dataset = rng.choice(range(len(self.dataset)), size=num_random_samples, replace=False)  ### requires seed??
+            assert num_random_samples <= len(dataset), \
+                f"Dataset only has {len(dataset)} samples"
+            random_dataset = rng.choice(range(len(self.dataset)), size=num_random_samples, replace=False)
             self.dataset = Subset(dataset, random_dataset)
 
         total_samples = len(self.dataset)
@@ -75,9 +82,9 @@ class PartiallyLabeledDataset(Dataset):
             self.labeled_indices = set(all_indices[:labeled_samples])
 
         elif labeled_class_samples is not None or labeled_class_samples_ratio is not None:
-            class_indices = dict()  # Index of samples per class
+            class_indices = dict()
             for i, (_, label) in enumerate(self.dataset):
-                if not label in class_indices:
+                if label not in class_indices:
                     class_indices[label] = []
                 class_indices[label].append(i)
 
@@ -85,12 +92,20 @@ class PartiallyLabeledDataset(Dataset):
             for label in class_indices:
                 if labeled_class_samples is not None:
                     if type(labeled_class_samples) == list:
-                        num_labeled = labeled_class_samples[label] if labeled_class_samples[label] is not None else len(class_indices[label])
+                        num_labeled = (
+                            labeled_class_samples[label]
+                            if labeled_class_samples[label] is not None
+                            else len(class_indices[label])
+                        )
                     else:
                         num_labeled = labeled_class_samples
                 else:
                     if type(labeled_class_samples_ratio) == list:
-                        num_labeled = int(len(class_indices[label]) * labeled_class_samples_ratio[label]) if labeled_class_samples_ratio[label] is not None else len(class_indices[label])
+                        num_labeled = (
+                            int(len(class_indices[label]) * labeled_class_samples_ratio[label])
+                            if labeled_class_samples_ratio[label] is not None
+                            else len(class_indices[label])
+                        )
                     else:
                         num_labeled = int(len(class_indices[label]) * labeled_class_samples_ratio)
                 self.labeled_indices.extend(random.sample(class_indices[label], num_labeled))
@@ -98,83 +113,98 @@ class PartiallyLabeledDataset(Dataset):
             self.labeled_indices = set(all_indices)
 
         if type(remove_unlabeled) == list:
-            keep = self.labeled_indices  + [i for i, (_, label) in enumerate(self.dataset) if i not in self.labeled_indices and label not in remove_unlabeled]
+            keep = self.labeled_indices + [
+                i for i, (_, label) in enumerate(self.dataset)
+                if i not in self.labeled_indices and label not in remove_unlabeled
+            ]
             self.dataset = Subset(self.dataset, keep)
             total_samples = len(self.dataset)
             self.labeled_indices = set(range(len(self.labeled_indices)))
-        elif remove_unlabeled == True:
+        elif remove_unlabeled is True:
             self.dataset = Subset(self.dataset, self.labeled_indices)
             total_samples = len(self.dataset)
             self.labeled_indices = set(range(total_samples))
 
-        # Index of labeled samples
         self.is_labeled = [i in self.labeled_indices for i in range(total_samples)]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.dataset)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int):
         sample = self.dataset[index]
-    
         if self.is_labeled[index]:
-            # Make sure all labels are the same type
-            sample = (sample[0], int(sample[1].item())) + sample[2:] if isinstance(sample[1], torch.Tensor) else sample
+            sample = (
+                (sample[0], int(sample[1].item())) + sample[2:]
+                if isinstance(sample[1], torch.Tensor)
+                else sample
+            )
             return sample
-        else:
-            # Adjust sample label to -1 (to represent unlabeled)
-            return (sample[0], -1) + sample[2:]
+        return (sample[0], -1) + sample[2:]
 
 
 def get_dataloaders(
-    datasets: list[torch.utils.data.Dataset],
+    datasets: list,
     batch_size: int,
     drop_last: bool = True,
-    shuffle: bool = True
-) -> list[torch.utils.data.DataLoader]:
-    """Return a dataloader for each dataset.
-    
+    shuffle: bool = True,
+) -> list:
+    """Create one DataLoader per dataset.
+
     Args:
-        datasets: A list of datasets to be wrapped in DataLoaders.
-        batch_size: The batch size for each DataLoader.
-        drop_last: If True, drops the last incomplete batch.
-        shuffle: If True, shuffles the data at the beginning of each epoch.
+        datasets (list[torch.utils.data.Dataset]): Source datasets.
+        batch_size (int): Number of samples per batch.
+        drop_last (bool): If ``True``, the last incomplete batch is dropped.
+            Defaults to ``True``.
+        shuffle (bool): If ``True``, data is shuffled at the start of each
+            epoch. Defaults to ``True``.
 
     Returns:
-        A list of PyTorch DataLoaders, one for each input dataset.
+        list[torch.utils.data.DataLoader]: One DataLoader for each input
+        dataset, in the same order.
     """
-    dataloaders = [torch.utils.data.DataLoader(ds, batch_size=batch_size, drop_last=drop_last, shuffle=shuffle)
-                   for ds in datasets]
+    dataloaders = [
+        torch.utils.data.DataLoader(
+            ds, batch_size=batch_size, drop_last=drop_last, shuffle=shuffle
+        )
+        for ds in datasets
+    ]
     return dataloaders
 
-def summarize_dataset(dataloaders: list[torch.utils.data.DataLoader], modality_names: list | None = None) -> None:
-    """Print the total number of samples and their class distribution.
-    
-    This function provides a summary of the samples within a list of
-    dataloaders, including the total count and a breakdown of samples per class.
-    It requires labeled datasets.
+
+def summarize_dataset(dataloaders: list, modality_names: list = None) -> None:
+    """Print sample counts and class distributions for a list of DataLoaders.
 
     Args:
-        dataloaders: A list of PyTorch DataLoaders to be summarized.
-        modality_names (list | None, optional): 
-            A list of names for each modality to be used in the printout. 
-            Defaults to None, in which case a numbered index is used.
+        dataloaders (list[torch.utils.data.DataLoader]): DataLoaders to
+            summarise. Each must wrap a labeled dataset.
+        modality_names (list[str], optional): Display names for each modality.
+            If ``None``, modalities are identified by their index.
+
+    Raises:
+        AssertionError: If ``modality_names`` is provided but its length does
+            not match the number of dataloaders, or if any element of
+            ``dataloaders`` is not a :class:`~torch.utils.data.DataLoader`.
     """
     if modality_names:
-        assert len(modality_names) == len(dataloaders), "The dataloaders and modality names provided should have the same length"
+        assert len(modality_names) == len(dataloaders), \
+            "The dataloaders and modality names provided should have the same length"
 
     if modality_names is None:
-        modality_names = [i for i in range(len(dataloaders))]
+        modality_names = list(range(len(dataloaders)))
 
     total_samples = Counter()
     for i, dataloader in enumerate(dataloaders):
-        assert isinstance(dataloader, torch.utils.data.DataLoader), f"You must provide a list of Pytorch DataLoaders"
+        assert isinstance(dataloader, torch.utils.data.DataLoader), \
+            "You must provide a list of PyTorch DataLoaders"
 
         dataset = dataloader.dataset
-        class_counter = Counter([data[1].tolist() if isinstance(data[1], torch.Tensor) else data[1] for data in dataset])
-        total_samples = total_samples + class_counter
+        class_counter = Counter([
+            data[1].tolist() if isinstance(data[1], torch.Tensor) else data[1]
+            for data in dataset
+        ])
+        total_samples += class_counter
 
         sorted_class_counter = dict(sorted(class_counter.items()))
-        # print(f"Dataset {modality_names[i]} ({sum(sorted_class_counter.values())} samples), samples per class: {sorted_class_counter}")
         print(f"Dataset {modality_names[i]} ({sum(sorted_class_counter.values())} samples)")
         print(f"Samples per class: {sorted_class_counter}")
         print()
@@ -183,38 +213,45 @@ def summarize_dataset(dataloaders: list[torch.utils.data.DataLoader], modality_n
     print(f"Total samples: {sum(sorted_total_samples.values())}: {sorted_total_samples}")
 
     if -1 in sorted_total_samples:
-        num_labeled = sum([sorted_total_samples[label] for label in sorted_total_samples if label != -1])
-        print(f"Global labeled samples ratio: {round(num_labeled / sum(sorted_total_samples.values()), 3)}")
+        num_labeled = sum(
+            sorted_total_samples[label]
+            for label in sorted_total_samples
+            if label != -1
+        )
+        print(
+            f"Global labeled samples ratio: "
+            f"{round(num_labeled / sum(sorted_total_samples.values()), 3)}"
+        )
+
 
 def get_samples_from_dataloader(
     dataloader: torch.utils.data.DataLoader,
     num_samples: int = None,
-    device: str = None
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Read a specific number of samples from a dataloader.
-    
+    device: str = None,
+) -> tuple:
+    """Read a fixed number of samples from a DataLoader.
+
     Args:
-        dataloader: The DataLoader to read samples from.
-        num_samples (int, optional): 
-            The number of samples to return. If None, returns all samples.
-            Defaults to None.
-        device (str, optional): 
-            The device ("cuda" or "cpu") to move the tensors to.
-            Defaults to None.
+        dataloader (torch.utils.data.DataLoader): Source DataLoader.
+        num_samples (int, optional): Number of samples to return. If ``None``,
+            all samples in the dataset are returned.
+        device (str, optional): Device string (e.g., ``'cuda'`` or ``'cpu'``)
+            to move tensors to. If ``None``, tensors remain on their original
+            device.
 
     Returns:
-        A tuple containing two tensors:
-        - The first tensor (`samples`) contains the sample data.
-        - The second tensor (`labels`) contains the corresponding labels.
-    
+        tuple[torch.Tensor, torch.Tensor]: A ``(samples, labels)`` pair where
+        ``samples`` has shape ``(num_samples, ...)`` and ``labels`` has shape
+        ``(num_samples,)``.
+
     Raises:
-        Exception: If the requested `num_samples` is greater than the total 
-            number of samples in the dataset.
+        Exception: If ``num_samples`` exceeds the total number of samples in
+            the dataset.
     """
     dataset_size = len(dataloader.dataset)
     batch_size = dataloader.batch_size
 
-    if num_samples == None:
+    if num_samples is None:
         num_samples = dataset_size
 
     if num_samples > dataset_size:
@@ -229,7 +266,7 @@ def get_samples_from_dataloader(
                 x, y = x.to(device), y.to(device)
             samples.append(x)
             labels.append(y)
-            if len(samples)*batch_size >= num_samples:
+            if len(samples) * batch_size >= num_samples:
                 break
 
     samples = torch.cat(samples, dim=0)[:num_samples]
@@ -237,221 +274,200 @@ def get_samples_from_dataloader(
 
     return samples, labels
 
-def random_split(
-        dataset: Dataset | list[Dataset], 
-        length_ratios: list[float],
-        paired: bool,
-        random_seed: int | None = None
-) -> list:
-    """Randomly split a dataset or multi-modal dataset.
-    
-    This function splits one or more datasets into subsets based on a list of 
-    length ratios. For multi-modal datasets, it can ensure that corresponding 
-    samples are kept together across all datasets.
+
+def random_split(dataset, length_ratios: list, paired: bool, random_seed: int = None) -> list:
+    """Randomly split a dataset or a list of multi-modal datasets.
+
+    For a single dataset the function delegates to
+    :func:`torch.utils.data.random_split`. For multiple datasets, splits can
+    be performed independently per modality or with paired indices so that
+    corresponding samples remain together across modalities.
 
     Args:
-        dataset: A single PyTorch `Dataset` or a list of `Dataset` objects.
-        length_ratios: A list of floats representing the ratios for each split. 
-            The ratios must sum to 1.0.
-        paired: If True, ensures corresponding samples across multiple datasets 
-            are kept together in the splits. This parameter is ignored for a single
-            dataset input.
-        random_seed (int, optional): A seed for the random number generator to 
-            ensure reproducibility. Defaults to None.
-    
+        dataset (torch.utils.data.Dataset or list[torch.utils.data.Dataset]):
+            A single dataset or a list of datasets (one per modality).
+        length_ratios (list[float]): Split proportions that must sum to
+            ``1.0``.
+        paired (bool): If ``True`` and ``dataset`` is a list, the same
+            index permutation is applied to all modalities so that paired
+            samples stay together. Ignored for a single dataset.
+        random_seed (int, optional): Seed for reproducibility.
+            Defaults to ``None``.
+
     Returns:
-        A list of splits. For a single dataset, the list contains `Subset` objects.
-        For multiple datasets, the list contains lists of `Subset` objects, where 
-        each inner list represents a split.
-    
+        list: For a single dataset, a list of :class:`~torch.utils.data.Subset`
+        objects. For multiple datasets, a list of lists where each inner list
+        contains the :class:`~torch.utils.data.Subset` objects for one split.
+
     Raises:
-        ValueError: If the dataset list is empty, if all datasets don't have the 
-            same length when `paired` is True, or if `length_ratios` do not sum 
-            to 1.0.
+        ValueError: If the dataset list is empty, if ``paired=True`` and
+            datasets differ in length, or if ``length_ratios`` do not sum to
+            ``1.0``.
     """
-    # Handle single dataset case
     if isinstance(dataset, Dataset):
         return torch.utils.data.random_split(
             dataset=dataset,
             lengths=length_ratios,
-            generator=torch.Generator().manual_seed(random_seed) if random_seed is not None else None
+            generator=torch.Generator().manual_seed(random_seed) if random_seed is not None else None,
         )
-    
-    # Multi-modal dataset case
+
     if not dataset:
         raise ValueError("Dataset list cannot be empty")
-    
-    # Verify all datasets have the same length for paired datasets
+
     dataset_length = len(dataset[0])
     if paired and not all(len(ds) == dataset_length for ds in dataset):
         raise ValueError("All datasets must have the same length for paired splitting")
-    
+
     if not paired:
-        # Split each dataset independently
-        splits = list(zip(*[torch.utils.data.random_split(
-            dataset=ds,
-            lengths=length_ratios,
-            generator=torch.Generator().manual_seed(random_seed) if random_seed is not None else None
-        ) for ds in dataset]))
+        splits = list(zip(*[
+            torch.utils.data.random_split(
+                dataset=ds,
+                lengths=length_ratios,
+                generator=torch.Generator().manual_seed(random_seed) if random_seed is not None else None,
+            )
+            for ds in dataset
+        ]))
         return splits
-    
-    # Paired dataset splitting - generate indices once and apply to all datasets
+
     generator = torch.Generator().manual_seed(random_seed) if random_seed is not None else None
     indices = torch.randperm(dataset_length, generator=generator).tolist()
-    
-    # Convert ratios to actual lengths
 
     if abs(sum(length_ratios) - 1.0) > 1e-6:
         raise ValueError(f"Length ratios must sum to 1.0, got {sum(length_ratios)}")
-    
+
     lengths = []
     remaining = dataset_length
     for ratio in length_ratios[:-1]:
         length = int(ratio * dataset_length)
         lengths.append(length)
         remaining -= length
-    lengths.append(remaining)  # Last split gets remaining samples
-    
-    # Create index splits
+    lengths.append(remaining)
+
     splits_indices = []
     start_idx = 0
     for length in lengths:
         end_idx = start_idx + length
         splits_indices.append(indices[start_idx:end_idx])
         start_idx = end_idx
-    
-    # Create Subset datasets for each split and each modality
+
     splits = []
     for split_indices in splits_indices:
         split_datasets = [Subset(ds, split_indices) for ds in dataset]
         splits.append(split_datasets)
-    
+
     return splits
 
-def _list_of_combinations(n: int) -> list[tuple[int, ...]]:
-    """Generates all possible combinations of n items.
+
+def _list_of_combinations(n: int) -> list:
+    """Generate all non-empty combinations of indices from ``0`` to ``n-1``.
 
     Args:
-        n: The total number of items.
+        n (int): Total number of items.
 
     Returns:
-        A list of tuples, where each tuple contains a unique combination 
-        (from 0 to n-1).
+        list[tuple[int, ...]]: All non-empty combinations in lexicographic
+        order.
     """
     indices = list(range(n))
     return [comb for r in range(1, n + 1) for comb in combinations(indices, r)]
 
-def _find_common_intersection(lists: list[list[Any]]) -> list[Any]:
-    """Finds the common intersection among sublists.
+
+def _find_common_intersection(lists: list) -> list:
+    """Find the common intersection of multiple lists.
 
     Args:
-        lists: List of lists of items to be compared.
+        lists (list[list]): Lists of items to intersect.
 
     Returns:
-        A list containing the elements that are present in all sublists.
-        Returns an empty list if there is no intersection.
+        list: Elements present in every sublist. Returns an empty list if
+        ``lists`` is empty or the intersection is empty.
     """
     if not lists:
         return []
     return list(set.intersection(*map(set, lists)))
 
-def _unique_intersections(indexes_list: list[list[str | int]]) -> dict[tuple[int, ...], list[str | int]]:
-    """Return the unique intersections across all combinations of the input sublists.
 
-    This function identifies samples that are shared among specific combinations of
-    modalities but are not present in any other modality outside that combination.
+def _unique_intersections(indexes_list: list) -> dict:
+    """Compute unique per-combination intersections across modality index lists.
+
+    For each possible non-empty combination of modalities, identifies the sample
+    IDs that appear in *all* modalities of that combination but in *none* of the
+    remaining modalities.
 
     Args:
-        indexes_list: A list of sublists, where each sublist contains identifiers 
-            (e.g., strings or integers) corresponding to a given modality or group.
+        indexes_list (list[list[str or int]]): Per-modality lists of sample
+            identifiers.
 
     Returns:
-        A dictionary mapping:
-          - Keys: Tuples of indices indicating which sublists (modalities) 
-            form the combination.
-          - Values: Sorted lists of items that are present in *all* sublists 
-            of the given combination, but absent from every other sublist 
-            outside the combination.
+        dict[tuple[int, ...], list]: Dictionary mapping each combination tuple
+        of modality indices to the sorted list of sample IDs that are unique to
+        that combination.
     """
     num_modalities = len(indexes_list)
     combination_dict = {}
 
-    # Iterate through all possible combinations of modalities
     for comb_tuple in _list_of_combinations(num_modalities):
-        # Convert the tuple of combination indices to a list for easier indexing
         comb_list = list(comb_tuple)
-
-        # Get the lists of sample IDs for the current combination of modalities
         current_modalities_indexes = [indexes_list[i] for i in comb_list]
-
-        # Calculate the intersection of sample IDs for the current combination
         intersection = set(_find_common_intersection(current_modalities_indexes))
 
-        # Identify the indices of the modalities *not* in the current combination
         other_modalities_indices = set(range(num_modalities)) - set(comb_list)
         other_indexes = set()
-
-        # Collect all sample IDs from the *other* modalities
         for i in other_modalities_indices:
             other_indexes.update(indexes_list[i])
 
-        # Find the sample IDs that are unique to the intersection of the current
-        # combination (i.e., present in the intersection but not in any other modality)
         combination_dict[comb_tuple] = sorted(list(intersection - other_indexes))
 
     return combination_dict
 
-def multimodal_dataset_split(
-    indexes_list: list[list[str | int]],
-    test_ratio: float = 0.2, 
-    stratify_by: list[list[int]] = None,
-    paired_only: bool = False,
-    random_seed: int = None
-) -> tuple[dict[int, list[Any]], dict[int, list[Any]]]:
-    """Generate train/test splits for multi-modal datasets.
 
-    This function splits a multi-modal dataset into training and testing sets, 
-    ensuring that samples shared across modalities are handled consistently
-    in the split. The splitting can be stratified based on class labels.
+def multimodal_dataset_split(
+    indexes_list: list,
+    test_ratio: float = 0.2,
+    stratify_by: list = None,
+    paired_only: bool = False,
+    random_seed: int = None,
+) -> tuple:
+    """Split a multi-modal dataset into training and test subsets.
+
+    Ensures that samples shared across modalities are handled consistently.
+    The split can be stratified by class label to preserve class distributions.
 
     Args:
-        indexes_list: A list of sublists, where each sublist contains sample 
-            identifiers corresponding to a given modality.
-        test_ratio (float, optional): The proportion of samples to allocate to the 
-            test set. Defaults to 0.2.
-        stratify_by (list[list[int]], optional): A list of lists, where each 
-            inner list contains the class labels for the corresponding modality's
-            samples. This ensures the class distribution is maintained in the splits.
-            Defaults to None.
-        paired_only (bool, optional): If True, only considers samples present in 
-            all modalities for the split. Defaults to False.
-        random_seed (int, optional): A seed for the random number generator.
-            Defaults to None.
+        indexes_list (list[list[str or int]]): Per-modality lists of sample
+            identifiers.
+        test_ratio (float): Proportion of samples to allocate to the test set.
+            Defaults to ``0.2``.
+        stratify_by (list[list[int]], optional): Per-modality class label lists
+            used to stratify the split. Each inner list must have the same
+            length as the corresponding entry in ``indexes_list``.
+            Defaults to ``None``.
+        paired_only (bool): If ``True``, only samples present in *all*
+            modalities are considered for the split. Defaults to ``False``.
+        random_seed (int, optional): Seed for reproducibility.
+            Defaults to ``None``.
 
     Returns:
-        A tuple containing two dictionaries:
-        - The first dictionary (`train_samples_per_modality`) has modality indices as keys
-          and lists of training sample IDs for that modality as values.
-        - The second dictionary (`test_samples_per_modality`) has modality indices as keys
-          and lists of testing sample IDs for that modality as values.
-    
+        tuple[dict[int, list], dict[int, list]]: A
+        ``(train_samples_per_modality, test_samples_per_modality)`` pair.
+        Each dictionary maps a modality index to the sorted list of sample IDs
+        assigned to that split.
+
     Raises:
-        ValueError: If `test_ratio` is not between 0 and 1, or if `stratify_by`
-            has an incorrect length or mismatched inner list lengths.
+        ValueError: If ``test_ratio`` is outside ``[0, 1]``, if
+            ``stratify_by`` has incorrect lengths, or if there are too few
+            samples for the requested test ratio.
     """
     if not 0 <= test_ratio <= 1:
         raise ValueError("test_ratio must be between 0 and 1")
 
-    # Set random seed
     if random_seed is not None:
         random.seed(random_seed)
 
-    # Initialize dictionaries to store training and testing samples per modality
     num_modalities = len(indexes_list)
     train_samples_per_modality = {i: [] for i in range(num_modalities)}
     test_samples_per_modality = {i: [] for i in range(num_modalities)}
 
-    # Get the dictionary of unique intersections per combination of modalities
     intersections_dict = _unique_intersections(indexes_list)
 
     if stratify_by is not None:
@@ -459,147 +475,142 @@ def multimodal_dataset_split(
             raise ValueError("stratify_by must have the same length as indexes_list")
         for i in range(len(stratify_by)):
             if len(stratify_by[i]) != len(indexes_list[i]):
-                raise ValueError(f"stratify_by[{i}] must have the same length as indexes_list[{i}]")
-        # sample_id to class mapping
-        sample_id_class_dict = {k: v for row_k, row_v in zip(indexes_list, stratify_by) for k, v in zip(row_k, row_v)}
+                raise ValueError(
+                    f"stratify_by[{i}] must have the same length as indexes_list[{i}]"
+                )
+        sample_id_class_dict = {
+            k: v
+            for row_k, row_v in zip(indexes_list, stratify_by)
+            for k, v in zip(row_k, row_v)
+        }
 
-    # Iterate through each combination of modalities and its unique intersecting samples
     for comb_tuple, unique_samples in intersections_dict.items():
-        if paired_only and len(comb_tuple) != num_modalities: continue
-        
+        if paired_only and len(comb_tuple) != num_modalities:
+            continue
+
         if not unique_samples:
-            continue  # Skip if there are no unique samples for this combination
+            continue
 
         n_total = len(unique_samples)
         n_test = round(n_total * test_ratio)
 
-        # Ensure there are enough samples for the test set
         if n_test <= 0 and n_total > 0:
-            raise ValueError(f"Not enough unique samples ({n_total}) for combination {comb_tuple} to create a test set with ratio {test_ratio}.")
+            raise ValueError(
+                f"Not enough unique samples ({n_total}) for combination {comb_tuple} "
+                f"to create a test set with ratio {test_ratio}."
+            )
 
         if stratify_by is None:
-            # Randomly sample test samples from the unique samples
             test_samples = random.sample(unique_samples, n_test)
-            # The remaining unique samples form the training set for this combination
             train_samples = list(set(unique_samples) - set(test_samples))
         else:
             unique_samples_class = [sample_id_class_dict[i] for i in unique_samples]
-            classes_dict = {c:[] for c in set(unique_samples_class)}
-        
+            classes_dict = {c: [] for c in set(unique_samples_class)}
             for sidx, s in enumerate(unique_samples):
-                c = unique_samples_class[sidx]
-                classes_dict[c].append(s)
+                classes_dict[unique_samples_class[sidx]].append(s)
 
-            class_nsamples_dict = {k:round(n_test * len(v)/n_total) for k,v in classes_dict.items()}
-           
+            class_nsamples_dict = {
+                k: round(n_test * len(v) / n_total)
+                for k, v in classes_dict.items()
+            }
             test_samples = []
             for ic, n_samples in class_nsamples_dict.items():
-                # if class_nsamples_dict[ic] <= 0:
-                #     raise ValueError(f"Not enough unique samples ({n_total}) for combination {comb_tuple} to create a test set with ratio {test_ratio}")
                 test_samples.extend(random.sample(classes_dict[ic], n_samples))
             test_samples = sorted(test_samples)
-
             train_samples = list(set(unique_samples) - set(test_samples))
-        
-        # Add the training and testing samples to the respective dictionaries
-        # for each modality involved in the current combination
+
         for i_mod in comb_tuple:
             train_samples_per_modality[i_mod].extend(train_samples)
             test_samples_per_modality[i_mod].extend(test_samples)
 
-    for k,v in train_samples_per_modality.items():
-        train_samples_per_modality[k] = sorted(v)
-
-    for k,v in test_samples_per_modality.items():
-        test_samples_per_modality[k] = sorted(v)
+    for k in train_samples_per_modality:
+        train_samples_per_modality[k] = sorted(train_samples_per_modality[k])
+    for k in test_samples_per_modality:
+        test_samples_per_modality[k] = sorted(test_samples_per_modality[k])
 
     return train_samples_per_modality, test_samples_per_modality
 
-def stratified_k_fold(k: int, datasets: list[torch.utils.data.Dataset], sample_ids: list[str|int] | None, random_seed: int | None = None) -> list[list[str]]:
+
+def stratified_k_fold(k: int, datasets: list, sample_ids: list = None, random_seed: int = None):
     """Generator for stratified k-fold cross-validation on multi-modal datasets.
 
-    This generator yields pairs of training and testing datasets for each fold, 
-    ensuring that the class distribution and sample pairing are maintained across
+    Yields train/test :class:`~torch.utils.data.Subset` pairs for each fold,
+    preserving class distribution and (optionally) sample pairing across
     modalities.
 
     Args:
-        k: The number of folds to divide the dataset into. Must be >= 2.
-        datasets: A list of PyTorch `Dataset` objects, one for each modality.
-        sample_ids (list[str|int] | None): 
-            A list of sample identifiers. Each inner list corresponds to a modality. 
-            Used for ensuring sample pairing. If None, samples are assumed to be
-            unpaired.
-        random_seed (int, optional): A seed for reproducibility. Defaults to None.
-    
+        k (int): Number of folds. Must be ``>= 2``.
+        datasets (list[torch.utils.data.Dataset]): One dataset per modality.
+        sample_ids (list[list[str or int]], optional): Per-modality lists of
+            sample identifiers used to keep paired samples together. If
+            ``None``, samples are treated as unpaired and identified by a
+            global sequential index.
+        random_seed (int, optional): Seed for reproducibility.
+            Defaults to ``None``.
+
     Yields:
-        A tuple of two lists of `Subset` objects:
-        - The first list represents the training datasets for the current fold.
-        - The second list represents the testing datasets for the current fold.
-    
+        tuple[list[Subset], list[Subset]]: A ``(train_datasets,
+        test_datasets)`` pair for each fold, where each element is a list of
+        :class:`~torch.utils.data.Subset` objects (one per modality).
+
     Raises:
-        AssertionError: If `k` is less than 2.
+        AssertionError: If ``k < 2``.
     """
     assert k >= 2, "K-fold cross-validation requires k >= 2"
 
     if sample_ids is None:
-        # Assume unpaired samples
         sample_ids = [
             [
-                sample_index + sum([len(ds) for i,ds in enumerate(datasets) if i<mi])
-                for sample_index,_ in enumerate(ds)
-            ] 
-            for mi,ds in enumerate(datasets)
+                sample_index + sum(len(datasets[j]) for j in range(mi))
+                for sample_index, _ in enumerate(ds)
+            ]
+            for mi, ds in enumerate(datasets)
         ]
     else:
         sample_ids = sample_ids.copy()
 
     classes = [[sample[1] for sample in ds] for ds in datasets]
-    idtoidx = [{sid:i for i,sid in enumerate(modality_ids)} for modality_ids in sample_ids]
+    idtoidx = [{sid: i for i, sid in enumerate(modality_ids)} for modality_ids in sample_ids]
 
-    # Generate folds
     folds = []
     for n in range(k, 0, -1):
         _, test_indexes = multimodal_dataset_split(
             sample_ids,
-            test_ratio=1/n,
+            test_ratio=1 / n,
             stratify_by=classes,
             paired_only=False,
-            random_seed=random_seed
+            random_seed=random_seed,
         )
         folds.append(test_indexes)
 
-        # Remove test_indexes from sample_ids and classes for next loop
         for modality_index in range(len(sample_ids)):
-            indexes_to_remove = [i for i,idx in enumerate(sample_ids[modality_index]) if idx not in test_indexes[modality_index]]
+            keep = [
+                i for i, idx in enumerate(sample_ids[modality_index])
+                if idx not in test_indexes[modality_index]
+            ]
+            sample_ids[modality_index] = [sample_ids[modality_index][i] for i in keep]
+            classes[modality_index] = [classes[modality_index][i] for i in keep]
 
-            sample_ids[modality_index] = [idx for i,idx in enumerate(sample_ids[modality_index]) if i in indexes_to_remove]
-            classes[modality_index] = [sample_class for i,sample_class in enumerate(classes[modality_index]) if i in indexes_to_remove]
-    
-    # Generate train, test datasets from k-folds
     for test_index in range(k):
         test_fold_ids = folds[test_index]
-        train_folds = folds[:test_index] + folds[test_index+1:]
+        train_folds = folds[:test_index] + folds[test_index + 1:]
 
-        # Concatenate train folds
         train_fold = defaultdict(list)
         for fold in train_folds:
             for key, value in fold.items():
-                train_fold[key].extend(value)        
+                train_fold[key].extend(value)
         train_fold_ids = dict(train_fold)
 
-        # Convert sample ids to sample indexes
         test_fold_indexes = {
-            modality_id: [idtoidx[modality_id][sample_id] for sample_id in modality]
+            modality_id: [idtoidx[modality_id][sid] for sid in modality]
             for modality_id, modality in test_fold_ids.items()
         }
-
         train_fold_indexes = {
-            modality_id: [idtoidx[modality_id][sample_id] for sample_id in modality]
+            modality_id: [idtoidx[modality_id][sid] for sid in modality]
             for modality_id, modality in train_fold_ids.items()
         }
-        
-        # Generate train, test dataset for this k-fold
+
         test_ds = [Subset(ds, test_fold_indexes[di]) for di, ds in enumerate(datasets)]
         train_ds = [Subset(ds, train_fold_indexes[di]) for di, ds in enumerate(datasets)]
-        
+
         yield train_ds, test_ds

@@ -1,15 +1,18 @@
 """
-Configuration utilities for MODIS.
+Model selection utilities for MODIS.
 
-This module provides helpers for loading, validating, and manipulating
-OmegaConf configuration objects used throughout the MODIS pipeline.
+This module provides helpers for flattening configurations, validating them,
+setting individual parameters, and generating hyperparameter grids for model
+selection experiments.
 """
 import sys
-import pathlib
 from itertools import product
+from pathlib import Path
+
+from omegaconf import OmegaConf, DictConfig, ListConfig
 
 import torch
-from omegaconf import OmegaConf, DictConfig, ListConfig
+import modis
 
 
 def flatten_omegaconf(config, parent_key: str = '') -> dict:
@@ -25,8 +28,7 @@ def flatten_omegaconf(config, parent_key: str = '') -> dict:
             Defaults to ``''``.
 
     Returns:
-        dict: A flat dictionary mapping dot-notation key strings to their
-        values.
+        dict: Flat dictionary mapping dot-notation strings to their values.
     """
     items = {}
     if isinstance(config, DictConfig):
@@ -49,31 +51,25 @@ def flatten_omegaconf(config, parent_key: str = '') -> dict:
 def validate_config(config: DictConfig) -> None:
     """Validate a MODIS training configuration.
 
-    Checks for the presence of all required fields, validates data types and
-    value ranges, and verifies consistency between settings (e.g.,
-    ``num_classes`` is required in ``supervised`` mode). Exits the program
-    with an error message if any validation rule is violated.
-
-    The following fields are required:
-
-    ``dataset_name``, ``model_name``, ``latent_size``, ``modalities``,
-    ``training_mode``, ``batch_size``, ``num_epochs``, ``learning_rate``,
-    ``beta``, ``beta1``, ``lambda_r``, ``device``,
-    ``save_checkpoint_latest``, ``save_checkpoint_best``.
+    Checks for required fields, value ranges, type constraints, and
+    cross-field consistency. Exits the program with an informative message if
+    any rule is violated.
 
     Args:
-        config (omegaconf.DictConfig): The configuration object to validate.
+        config (omegaconf.DictConfig): Configuration object to validate.
 
     Raises:
-        SystemExit: If any validation rule is not satisfied.
+        SystemExit: If the configuration is invalid.
+        TypeError: If ``beta`` is neither a ``float`` nor a list.
+        AssertionError: If ``beta`` is a list whose length does not match the
+            number of modalities.
     """
     error = None
 
     required_fields = [
         'dataset_name', 'model_name', 'latent_size', 'modalities',
-        'training_mode', 'batch_size', 'num_epochs', 'learning_rate',
-        'beta', 'beta1', 'lambda_r', 'device',
-        'save_checkpoint_latest', 'save_checkpoint_best',
+        'training_mode', 'batch_size', 'num_epochs', 'generators_lr',
+        'discriminator_lr', 'beta', 'beta1', 'lambda_r', 'device',
     ]
 
     for field in required_fields:
@@ -91,12 +87,14 @@ def validate_config(config: DictConfig) -> None:
         error = f'Invalid batch_size: {config.batch_size}. Must be positive integer.'
     elif error is None and config.num_epochs <= 0:
         error = f'Invalid num_epochs: {config.num_epochs}. Must be positive integer.'
-    elif error is None and config.learning_rate <= 0:
-        error = f'Invalid learning_rate: {config.learning_rate}. Must be positive.'
+    elif error is None and config.generators_lr <= 0:
+        error = f'Invalid generators_lr: {config.generators_lr}. Must be positive.'
+    elif error is None and config.discriminator_lr <= 0:
+        error = f'Invalid discriminator_lr: {config.discriminator_lr}. Must be positive.'
     elif error is None and not (0 <= config.beta1 <= 1):
         error = f'Invalid beta1: {config.beta1}. Must be between 0 and 1.'
-    elif error is None and config.lambda_r < 1:
-        error = f'Invalid lambda_r: {config.lambda_r}. Must be greater than 1.'
+    elif error is None and config.lambda_r < 0:
+        error = f'Invalid lambda_r: {config.lambda_r}. Must be non-negative.'
     elif error is None:
         if not config.modalities or len(config.modalities) < 2:
             error = 'At least two modalities must be specified.'
@@ -135,20 +133,11 @@ def validate_config(config: DictConfig) -> None:
             error = f'Invalid num_classes: {config.num_classes}. Must be positive integer.'
 
     if error is None:
-        boolean_fields = ['save_checkpoint_latest', 'save_checkpoint_best']
+        boolean_fields = ['save_checkpoint', 'use_relativistic_loss']
         for field in boolean_fields:
-            if not isinstance(config[field], bool):
+            if field in config and not isinstance(config[field], bool):
                 error = f'Invalid {field}: {config[field]}. Must be boolean (true/false).'
                 break
-
-    if error is None:
-        if isinstance(config.beta, ListConfig) and len(config.beta) != len(config.modalities):
-            error = (
-                "Invalid beta parameter. "
-                "The length of the list must match the number of modalities."
-            )
-        elif not isinstance(config.beta, (float, ListConfig)):
-            error = "Invalid beta parameter. Must be a float or a list."
 
     if error is not None:
         print(f'[-] Configuration error: {error}')
@@ -157,18 +146,23 @@ def validate_config(config: DictConfig) -> None:
     if config.device == 'auto':
         config.device = "cuda" if torch.cuda.is_available() else "cpu"
 
+    if isinstance(config.beta, ListConfig):
+        assert len(config.beta) == len(config.modalities), \
+            "The 'beta' parameter must be a list whose length matches the number of modalities."
+    elif not isinstance(config.beta, float):
+        raise TypeError("The 'beta' parameter must be a float or a list.")
+
 
 def set_param(config: DictConfig, param_name: str, param_value) -> None:
     """Set a parameter value inside an OmegaConf configuration object.
 
-    Supports both top-level keys and nested keys expressed in dot notation
+    Supports both top-level keys and nested keys in dot notation
     (e.g., ``'modalities.0.input_size'``).
 
     Args:
-        config (omegaconf.DictConfig): The configuration object to modify.
-        param_name (str): Name of the parameter to update. May be a simple
-            key or a dot-separated nested key.
-        param_value: The new value for the parameter.
+        config (omegaconf.DictConfig): Configuration object to modify.
+        param_name (str): Name of the parameter to update.
+        param_value: The new value.
 
     Raises:
         KeyError: If ``param_name`` does not exist in the configuration.
@@ -183,31 +177,31 @@ def set_param(config: DictConfig, param_name: str, param_value) -> None:
         config[param_name] = param_value
 
 
-def generate_grid(base_config_file: pathlib.Path, params: dict) -> list:
-    """Generate a grid of configurations from a base config and parameter ranges.
+def generate_grid(base_config_file: Path, params: dict) -> list:
+    """Generate a hyperparameter grid from a base configuration file.
 
-    Loads a base configuration file and returns one :class:`omegaconf.DictConfig`
-    per unique combination of the supplied parameter values. Each configuration
-    is validated before being added to the grid.
+    Loads a base YAML configuration and returns one validated
+    :class:`omegaconf.DictConfig` per unique combination of the supplied
+    parameter values.
 
     Args:
         base_config_file (pathlib.Path): Path to the base YAML configuration
             file.
-        params (dict): Dictionary of parameters to vary. Keys are parameter
-            names (simple or dot-notation nested), values are lists of possible
+        params (dict): Hyperparameters to vary. Keys are parameter names
+            (simple or dot-notation nested) and values are lists of candidate
             values (e.g., ``{'latent_size': [32, 64], 'beta': [1e-4, 1e-3]}``).
 
     Returns:
-        list[omegaconf.DictConfig]: One validated configuration object per
-        parameter combination.
+        list[omegaconf.DictConfig]: One validated configuration per parameter
+        combination.
 
     Raises:
         FileNotFoundError: If ``base_config_file`` does not exist.
         ValueError: If ``params`` is empty or the base configuration fails to
             load.
+        KeyError: If any parameter name does not exist in the base
+            configuration.
     """
-    from modis.utils.io import load_config
-
     if not base_config_file.exists():
         raise FileNotFoundError(f"Base config file not found: {base_config_file}")
 
@@ -215,7 +209,7 @@ def generate_grid(base_config_file: pathlib.Path, params: dict) -> list:
         raise ValueError("Parameters dictionary cannot be empty")
 
     try:
-        base_config = load_config(base_config_file)
+        base_config = modis.load_config(base_config_file)
     except Exception as e:
         raise ValueError(f"Failed to load config from {base_config_file}: {e}")
 
@@ -232,22 +226,3 @@ def generate_grid(base_config_file: pathlib.Path, params: dict) -> list:
         grid.append(new_config)
 
     return grid
-
-
-def config_from_dict(config_dict: dict) -> DictConfig:
-    """Create a validated configuration from a plain Python dictionary.
-
-    Args:
-        config_dict (dict): Dictionary to convert into an OmegaConf
-            :class:`~omegaconf.DictConfig`.
-
-    Returns:
-        omegaconf.DictConfig: A validated configuration object.
-
-    Raises:
-        SystemExit: If the dictionary fails validation (see
-            :func:`validate_config`).
-    """
-    config = OmegaConf.create(config_dict)
-    validate_config(config)
-    return config

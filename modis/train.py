@@ -1,18 +1,21 @@
 """
-This module provides functions for training a MODIS model, including setting up
-the training loop, handling checkpoints, and performing evaluations.
+Training orchestration for MODIS.
 
-The main functions are:
-    - `train_loop`: Manages the core training process, including epoch-based
-      iteration, loss calculation, and checkpoint saving.
-    - `train`: Orchestrates the complete training workflow, which can include
-      the training loop, model evaluation, and report generation.
+This module provides functions for training a MODIS model, including the
+core training loop, checkpoint handling, model evaluation, and plot generation.
 
-The module supports:
-    - Resuming training from a saved checkpoint.
-    - Saving the best and/or latest model checkpoints based on performance metrics.
-    - Evaluating model performance on validation datasets.
-    - Generating plots and reports for the training and evaluation process.
+The main entry points are:
+
+- :func:`train_loop`: Runs the epoch-based training loop.
+- :func:`train`: Orchestrates the complete workflow — training, evaluation,
+  and report generation.
+
+The module also supports:
+
+- Resuming training from a saved checkpoint via ``--checkpoint`` CLI argument.
+- Saving the best and/or latest model checkpoints.
+- Evaluating model performance on a held-out validation dataset.
+- Generating diagnostic plots after training.
 """
 import time
 import argparse
@@ -22,7 +25,6 @@ import numpy as np
 from omegaconf import OmegaConf, DictConfig
 
 import torch
-# from torch.utils.tensorboard import SummaryWriter
 
 from modis.training import Trainer
 from modis.utils.io import load_config
@@ -32,50 +34,61 @@ from modis.utils.evaluation import evaluate_model, launch_checkpoints_evaluation
 from modis.utils.plots import checkpoint_report_plots
 from modis.utils.io import load_checkpoint, load_log
 
-def parse_args():
-    """
-    Parses command-line arguments.
 
-    The only argument supported right now is --checkpoint, that allows resuming training.
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments for the training script.
+
+    Currently supports a single optional argument:
+
+    - ``--checkpoint``: Path to a checkpoint file to resume training from.
 
     Returns:
-        argparse.Namespace: An object containing the parsed arguments.
+        argparse.Namespace: Parsed arguments namespace.
     """
     parser = argparse.ArgumentParser(description="MODIS Training Configuration")
     parser.add_argument('--checkpoint', type=Path, default=None, help='Checkpoint file.')
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
+
 
 def train_loop(
     config: DictConfig,
-    train_datasets: list[torch.utils.data.Dataset],
-    val_datasets: list[torch.utils.data.Dataset] | None = None,
+    train_datasets: list,
+    val_datasets: list = None,
     show_dataset_summary: bool = True,
-    read_args: bool = True
-) -> Path | None:
-    """
-    Executes the main training loop for the model.
+    read_args: bool = True,
+) -> Path:
+    """Execute the core epoch-based training loop.
 
-    This function handles the epoch-wise training process, including iterating
-    through dataloaders, performing training steps, collecting training performance metrics, and
-    saving checkpoints.
+    Iterates over the training data for the configured number of epochs,
+    performs training steps via :class:`~modis.training.Trainer`, logs
+    metrics, and saves checkpoints.
+
+    If ``read_args=True`` and a ``--checkpoint`` argument is supplied on the
+    command line, training resumes from that checkpoint.
 
     Args:
-        config (DictConfig): The training configuration object.
-        train_datasets (list[torch.utils.data.Dataset]): A list of training datasets.
-        val_datasets (list[torch.utils.data.Dataset] | None): A list of validation datasets, or None if not provided.
-        show_dataset_summary (bool): If True, prints a summary of the training and validation datasets.
-        read_args (bool): If True, parses command-line arguments to check for a checkpoint to resume from.
+        config (omegaconf.DictConfig): Training configuration object.
+        train_datasets (list[torch.utils.data.Dataset]): Training datasets,
+            one per modality.
+        val_datasets (list[torch.utils.data.Dataset], optional): Validation
+            datasets, one per modality. When provided, validation accuracy is
+            computed each epoch and factored into the best-checkpoint
+            criterion. Defaults to ``None``.
+        show_dataset_summary (bool): If ``True``, prints a dataset summary
+            table before training begins. Defaults to ``True``.
+        read_args (bool): If ``True``, parses command-line arguments to check
+            for a checkpoint path. Set to ``False`` when calling
+            programmatically to avoid conflicts with ``sys.argv``.
+            Defaults to ``True``.
 
     Returns:
-        Path | None: The path to the directory where checkpoints were saved, or None if no checkpoints were saved.
+        pathlib.Path or None: Path to the checkpoint directory if at least one
+        checkpoint was saved; ``None`` otherwise.
     """
     args = parse_args() if read_args else None
 
-    # Variables
     log = []
     save_path = Path("./saved")
-    # log_path = Path("./saved/log")
     device = config.device
     timestamp = time.strftime('%Y%m%d_%H%M%S')
     init_epoch = 0
@@ -95,31 +108,27 @@ def train_loop(
         log = load_log(log_file)
 
         timestamp = checkpoint_data['timestamp']
-        init_epoch = checkpoint_data['epoch']+1
+        init_epoch = checkpoint_data['epoch'] + 1
 
         config_file = args.checkpoint.parent / 'config.yaml'
         config = OmegaConf.load(config_file)
 
-    # Instantiate dataloaders
     train_dataloaders = get_dataloaders(train_datasets, batch_size=config.batch_size, drop_last=True, shuffle=True)
 
     if val_datasets is not None:
         val_dataloaders = get_dataloaders(val_datasets, batch_size=config.batch_size, drop_last=True, shuffle=True)
 
     if show_dataset_summary:
-        print("==> Summary of train datasets")
         modality_names = [m.name for m in config.modalities]
+        print("==> Summary of train datasets")
         summarize_dataset(train_dataloaders, modality_names=modality_names)
         print()
-
         if val_datasets is not None:
             print("==> Summary of validation datasets")
             summarize_dataset(val_dataloaders, modality_names=modality_names)
             print()
 
     trainer = Trainer(config)
-
-    # writer = SummaryWriter(log_dir=f"{log_path}/{timestamp}")
 
     if init_epoch > 0:
         trainer.load_model_and_optimizer_states(checkpoint_data)
@@ -129,7 +138,7 @@ def train_loop(
 
     checkpoint_file = None
     start_time = time.time()
-    for epoch in range(init_epoch, init_epoch+config.num_epochs):
+    for epoch in range(init_epoch, init_epoch + config.num_epochs):
         metrics = []
         for i, data in enumerate(zip(*train_dataloaders)):
             x = []
@@ -139,35 +148,38 @@ def train_loop(
                 modal_x, modal_y = data[i][0], data[i][1]
                 x.append(modal_x.to(device))
                 y.append(modal_y.to(device))
-                is_labeled.append(torch.tensor([True if label >= 0 else False for label in modal_y]))
+                is_labeled.append(torch.tensor([label >= 0 for label in modal_y]))
 
                 if config.training_mode == 'supervised':
                     if sum(is_labeled[i]) != modal_x.size(0):
-                        raise Exception("Supervised training requires all samples to be labeled, -1 labels are invalid")
+                        raise Exception(
+                            "Supervised training requires all samples to be labeled; "
+                            "-1 labels are invalid."
+                        )
 
-            # Train step
             batch_metrics = trainer.train_step(x, y, is_labeled)
             metrics.append(batch_metrics)
 
-        # Process log
         epoch_metrics = {
-            key: np.mean([d[key] for d in metrics if d[key] is not None]).item() if type(metrics[0][key]) != list else [np.mean(m).item() for m in zip(*[d[key] for d in metrics])]
+            key: (
+                np.mean([d[key] for d in metrics if d[key] is not None]).item()
+                if not isinstance(metrics[0][key], list)
+                else [np.mean(m).item() for m in zip(*[d[key] for d in metrics])]
+            )
             for key in metrics[0]
         }
         epoch_metrics['epoch_idx'] = epoch
 
-        #
         val_acc_str = ''
         if val_datasets is not None:
             val_metrics = evaluate_model(trainer.model, val_dataloaders)
             epoch_metrics['val_acc'] = val_metrics.get('acc', 0.)
             val_acc_str = f"val_acc: {epoch_metrics['val_acc']:.4f}"
 
-        #
         log.append(epoch_metrics)
 
         print(
-            f"epoch: {epoch+1}/{init_epoch + config.num_epochs}, "
+            f"epoch: {epoch + 1}/{init_epoch + config.num_epochs}, "
             f"recon_loss: {epoch_metrics['recon_loss']:.4f}, "
             f"kl_loss: {epoch_metrics['kl_loss']:.4f}, "
             f"d_train_loss: {epoch_metrics['d_train_loss']:.4f}, "
@@ -176,17 +188,12 @@ def train_loop(
             f"d_aux_acc: {epoch_metrics['d_aux_acc']:.4f}"
             f" {val_acc_str}"
         )
-        # writer.add_scalar(f"{config.model_name}/Loss/recon_loss" , epoch_metrics['recon_loss'], epoch+1)
-        # writer.add_scalar(f"{config.model_name}/Loss/g_loss", epoch_metrics['g_loss'], epoch+1)
-        # writer.add_scalar(f"{config.model_name}/Accuracy/d_aux_acc", epoch_metrics['d_aux_acc'], epoch+1)
-        # if val_datasets is not None:
-        #     writer.add_scalar(f"{config.model_name}/Accuracy/val_acc", epoch_metrics['val_acc'], epoch+1)
 
-        # Save best checkpoint
         if val_datasets is not None:
             is_best = epoch_metrics['g_loss'] < best_loss and epoch_metrics['val_acc'] >= val_acc
         else:
             is_best = epoch_metrics['g_loss'] < best_loss
+
         if is_best and config.save_checkpoint_best:
             best_loss = epoch_metrics['g_loss']
             if val_datasets is not None:
@@ -197,22 +204,19 @@ def train_loop(
                 best_epoch=best_epoch,
                 best_loss=best_loss,
                 val_acc=val_acc,
-                timestamp = timestamp,
-                config = config,
-                log = log,
-                save_path = save_path,
-                is_best = True,
-                verbose=False
+                timestamp=timestamp,
+                config=config,
+                log=log,
+                save_path=save_path,
+                is_best=True,
+                verbose=False,
             )
 
-    # writer.close()
-
-    print(f"Trained {epoch-init_epoch+1} epochs in {adjust_time(time.time() - start_time)}")
+    print(f"Trained {epoch - init_epoch + 1} epochs in {adjust_time(time.time() - start_time)}")
     print("==> Training finished!")
-    print(f"Best model on epoch {best_epoch+1}")
+    print(f"Best model on epoch {best_epoch + 1}")
 
-    # Save latest checkpoint
-    if config.save_checkpoint_latest:    
+    if config.save_checkpoint_latest:
         checkpoint_file = trainer.save_checkpoint(
             epoch=epoch,
             best_epoch=best_epoch,
@@ -222,9 +226,9 @@ def train_loop(
             config=config,
             log=log,
             save_path=save_path,
-            is_best=False
+            is_best=False,
         )
-    
+
     checkpoint_dir = checkpoint_file.parent if checkpoint_file is not None else None
 
     del trainer
@@ -232,41 +236,47 @@ def train_loop(
 
     return checkpoint_dir
 
+
 def train(
     config: DictConfig,
-    train_datasets: list[torch.utils.data.Dataset],
-    val_datasets: list[torch.utils.data.Dataset] | None = None,
+    train_datasets: list,
+    val_datasets: list = None,
     show_dataset_summary: bool = True,
     run_evaluation: bool = True,
     generate_plots: bool = True,
-    read_args: bool = True
-) -> Path | None:
-    """
-    Orchestrates the complete training workflow.
+    read_args: bool = True,
+) -> Path:
+    """Orchestrate the complete MODIS training workflow.
 
-    This function combines the training loop, model evaluation, and plot
-    generation into a single, comprehensive process.
+    Calls :func:`train_loop` and optionally runs checkpoint evaluation and
+    diagnostic plot generation afterwards.
 
     Args:
-        config (DictConfig): The training configuration object.
-        train_datasets (list[torch.utils.data.Dataset]): A list of training datasets.
-        val_datasets (list[torch.utils.data.Dataset] | None): A list of validation datasets, or None if not provided.
-        show_dataset_summary (bool): If True, prints a summary of the datasets before training starts.
-        run_evaluation (bool): If True, runs evaluation on the saved checkpoints after training.
-        generate_plots (bool): If True, generates report plots for the training and evaluation results.
-        read_args (bool): If True, parses command-line arguments.
+        config (omegaconf.DictConfig): Training configuration object.
+        train_datasets (list[torch.utils.data.Dataset]): Training datasets,
+            one per modality.
+        val_datasets (list[torch.utils.data.Dataset], optional): Validation
+            datasets, one per modality. Defaults to ``None``.
+        show_dataset_summary (bool): If ``True``, prints dataset summaries
+            before training. Defaults to ``True``.
+        run_evaluation (bool): If ``True``, evaluates saved checkpoints on
+            both training and validation datasets after training.
+            Defaults to ``True``.
+        generate_plots (bool): If ``True``, generates and saves diagnostic
+            plots for each saved checkpoint. Defaults to ``True``.
+        read_args (bool): If ``True``, parses CLI arguments inside
+            :func:`train_loop`. Defaults to ``True``.
 
     Returns:
-        Path | None: The path to the directory where checkpoints and reports were saved, or None if the training loop did not produce any checkpoints.
+        pathlib.Path or None: Path to the checkpoint directory, or ``None``
+        if the training loop did not produce any checkpoints.
     """
-
-    # Train model
     checkpoint_dir = train_loop(
         config=config,
         train_datasets=train_datasets,
         val_datasets=val_datasets,
         show_dataset_summary=show_dataset_summary,
-        read_args=read_args
+        read_args=read_args,
     )
 
     if checkpoint_dir is None:
@@ -277,47 +287,30 @@ def train(
         launch_checkpoints_evaluation(
             train_datasets=train_datasets,
             val_datasets=val_datasets,
-            checkpoint_dir=checkpoint_dir
+            checkpoint_dir=checkpoint_dir,
         )
 
     if generate_plots:
         config = load_config(checkpoint_dir / 'config.yaml')
 
-        if config.save_checkpoint_latest:
+        for use_best in [False, True]:
+            flag = 'save_checkpoint_best' if use_best else 'save_checkpoint_latest'
+            if not getattr(config, flag):
+                continue
             checkpoint_report_plots(
-                checkpoint_dir = checkpoint_dir,
-                datasets = train_datasets,
-                is_train = True,
-                use_best = False,
-                num_samples = None
+                checkpoint_dir=checkpoint_dir,
+                datasets=train_datasets,
+                is_train=True,
+                use_best=use_best,
+                num_samples=None,
             )
-
-        if config.save_checkpoint_best:
-            checkpoint_report_plots(
-                checkpoint_dir = checkpoint_dir,
-                datasets = train_datasets,
-                is_train = True,
-                use_best = True,
-                num_samples = None
-            )
-
-        if val_datasets is not None:
-            if config.save_checkpoint_latest:
+            if val_datasets is not None:
                 checkpoint_report_plots(
-                    checkpoint_dir = checkpoint_dir,
-                    datasets = val_datasets,
-                    is_train = False,
-                    use_best = False,
-                    num_samples = None
-                )
-
-            if config.save_checkpoint_best:
-                checkpoint_report_plots(
-                    checkpoint_dir = checkpoint_dir,
-                    datasets = val_datasets,
-                    is_train = False,
-                    use_best = True,
-                    num_samples = None
+                    checkpoint_dir=checkpoint_dir,
+                    datasets=val_datasets,
+                    is_train=False,
+                    use_best=use_best,
+                    num_samples=None,
                 )
 
     return checkpoint_dir

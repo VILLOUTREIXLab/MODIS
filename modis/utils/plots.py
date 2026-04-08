@@ -1,3 +1,10 @@
+"""
+Plotting utilities for MODIS.
+
+This module provides functions for visualising training logs, latent space
+projections (2-D and 3-D PCA), confusion matrices, and cross-modal
+reconstruction/translation heatmaps.
+"""
 import pathlib
 import colorsys
 from typing import Literal
@@ -6,7 +13,6 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-# import umap.umap_ as umap
 import plotly.graph_objects as go
 import plotly.io as pio
 from sklearn.decomposition import PCA
@@ -25,61 +31,63 @@ def plot_training_log(
     checkpoint_dir: pathlib.Path,
     use_best: bool = True,
     save_plot: bool = False,
-    figsize: tuple = (15, 10)
+    figsize: tuple = (15, 10),
 ) -> None:
-    """Plot training log.
+    """Plot training metrics from a saved training log.
 
-    This function plots various training metrics (losses, accuracies) from a
-    saved training log file. It displays multiple subplots for different metrics
-    over the training epochs.
+    Reads a JSON log file from ``checkpoint_dir`` and produces a figure with
+    subplots for reconstruction loss, KL divergence, discriminator losses,
+    generator loss, gradient penalties (if applicable), and accuracy curves.
 
     Args:
-        training_mode: The training mode, e.g., 'semisupervised'.
-        modality_names: A list of names for each modality.
-        checkpoint_dir: Path to the directory containing the training log.
-        use_best: If True, uses the log from the best checkpoint; otherwise,
-            uses the latest.
-        save_plot: If True, saves the plot to a file; otherwise, displays it.
-        figsize: A tuple specifying the figure size.
+        training_mode (str): Training mode string displayed in the figure
+            title (e.g., ``'semisupervised'``).
+        modality_names (list[str]): Display names for each modality.
+        checkpoint_dir (pathlib.Path): Directory containing the training log
+            JSON file.
+        use_best (bool): If ``True``, reads ``checkpoint_log_best.json``;
+            otherwise reads ``checkpoint_log_latest.json``.
+            Defaults to ``True``.
+        save_plot (bool): If ``True``, saves the figure as an SVG file in
+            ``checkpoint_dir``; otherwise displays it interactively.
+            Defaults to ``False``.
+        figsize (tuple[int, int]): Figure dimensions ``(width, height)`` in
+            inches. Defaults to ``(15, 10)``.
 
     Raises:
-        FileNotFoundError: If the checkpoint directory or log file does not exist.
+        FileNotFoundError: If ``checkpoint_dir`` or the log file does not
+            exist.
     """
-    from modis import load_log  # Import here to avoid partially initialized module error 
+    from modis import load_log
 
     if not checkpoint_dir.exists():
         raise FileNotFoundError(f"Checkpoint dir {checkpoint_dir} doesn't exist.")
 
-    if use_best:
-        log_file = checkpoint_dir / "checkpoint_log_best.json"
-    else:
-        log_file = checkpoint_dir / "checkpoint_log_latest.json"
+    log_file = checkpoint_dir / (
+        "checkpoint_log_best.json" if use_best else "checkpoint_log_latest.json"
+    )
     log = load_log(log_file)
 
     relativistic = len(log[0]['r']) > 0
     num_modalities = len(log[0]['modal_recon_loss'])
     x = range(log[0]['epoch_idx'] + 1, log[-1]['epoch_idx'] + 2)
 
-    # recon_loss = [item['recon_loss'] for item in log]
     modal_recon_loss = [[item['modal_recon_loss'][i] for item in log] for i in range(num_modalities)]
-    # kl_loss = [item['kl_loss'] for item in log]
     kl_loss_modal = [[item['modal_kl_loss'][i] for item in log] for i in range(num_modalities)]
     d_train_loss = [item['d_train_loss'] for item in log]
     d_loss = [item['d_loss'] for item in log]
     g_loss = [item['g_loss'] for item in log]
-    # d_cluster_loss = [item['d_cluster_loss'] for item in log]
     if relativistic:
         penalties = [[item['r'][i] for item in log] for i in range(num_modalities)]
     d_adv_acc = [item['d_adv_acc'] for item in log]
     d_aux_acc = [item['d_aux_acc'] for item in log]
     if 'val_acc' in log[0]:
         val_acc = [item['val_acc'] for item in log]
-    
+
     fig = plt.figure(figsize=figsize)
     fig.suptitle(f'Training mode: {training_mode}', y=0.97)
 
     plt.subplot(2, 3, 1)
-    # plt.plot(x, recon_loss, label='recon_loss')
     for i in range(num_modalities):
         plt.plot(x, modal_recon_loss[i], label=f'recon_loss_{modality_names[i]}')
     plt.xlabel('epoch')
@@ -88,7 +96,6 @@ def plot_training_log(
     plt.grid()
 
     plt.subplot(2, 3, 2)
-    # plt.plot(x, kl_loss, label='kl_loss')
     for i in range(num_modalities):
         plt.plot(x, kl_loss_modal[i], label=f'kl_loss_{modality_names[i]}')
     plt.xlabel('epoch')
@@ -104,13 +111,6 @@ def plot_training_log(
     plt.legend(prop={'size': 11})
     plt.grid()
 
-    # plt.subplot(2, 3, 4)
-    # plt.plot(x, d_cluster_loss, label='d_cluster_loss')
-    # plt.xlabel('epoch')
-    # plt.ylabel('loss')
-    # plt.legend(prop={'size': 11})
-    # plt.grid()
-
     plt.subplot(2, 3, 4)
     plt.plot(x, g_loss, label='g_loss')
     plt.xlabel('epoch')
@@ -121,7 +121,7 @@ def plot_training_log(
     if relativistic:
         plt.subplot(2, 3, 5)
         for i in range(num_modalities):
-            plt.plot(x, penalties[i], label=f'R{i+1}')
+            plt.plot(x, penalties[i], label=f'R{i + 1}')
         plt.xlabel('epoch')
         plt.ylabel('penalty')
         plt.legend(prop={'size': 11})
@@ -138,170 +138,152 @@ def plot_training_log(
     plt.legend(prop={'size': 11})
     plt.grid()
 
-    plt.tight_layout(rect=[0, 0, 1, 0.97])  # Add space for subtitle
+    plt.tight_layout(rect=[0, 0, 1, 0.97])
 
     if save_plot:
-        if use_best:
-            figure_file = checkpoint_dir / 'training_log_best.svg'
-        else:
-            figure_file = checkpoint_dir / 'training_log_latest.svg'
-        plt.savefig(
-            figure_file,
-            format='svg', 
-            bbox_inches='tight'
-        )
+        suffix = 'best' if use_best else 'latest'
+        figure_file = checkpoint_dir / f'training_log_{suffix}.svg'
+        plt.savefig(figure_file, format='svg', bbox_inches='tight')
         plt.close()
     else:
         plt.show()
 
 
 colorblind_safe_colors = [
-    '#E6194B',
-    '#3CB44B',
-    '#4363D8',
-    '#42D4F4',
-    '#F032E6',
-    '#FFE119',
-    '#000000',
-    '#ADD8E6',
-    '#F58231',
-    '#911EB4',
-    '#FABED4',
-    '#A9A9A9'
+    '#E6194B', '#3CB44B', '#4363D8', '#42D4F4', '#F032E6',
+    '#FFE119', '#000000', '#ADD8E6', '#F58231', '#911EB4',
+    '#FABED4', '#A9A9A9',
 ]
 
 colors = [
-    "#FF0000",   # Red
-    "#80FF00",   # Lime
-    "#0080C0",   # Medium Blue    
-    "#F58231",   # Orange
-    "#8000FF",   # Indigo
-    "#FF80FF",   # Lavender
-    "#FFFF00",   # Yellow
-    #"#00FFFF",   # Cyan
+    "#FF0000", "#80FF00", "#0080C0", "#F58231",
+    "#8000FF", "#FF80FF", "#FFFF00",
 ]
 
-def get_colors(n=5) -> list[str]:
-    """Return a list of hexadecimal color codes.
+
+def get_colors(n: int = 5) -> list:
+    """Return a list of ``n`` hexadecimal color codes.
+
+    Falls back to a rainbow colormap when ``n`` exceeds the built-in palette.
 
     Args:
-        n: The number of colors to return. If n is greater than the
-            predefined list, a rainbow colormap is used.
+        n (int): Number of colors requested. Defaults to ``5``.
 
     Returns:
-        A list of hexadecimal color strings.
+        list[str]: List of hexadecimal color strings of length ``n``.
     """
-    # assert n <= len(colors), f"Only {len(colors)} available"
     if n > len(colors):
         import matplotlib.colors as mcolors
         colors_from_cmap = plt.cm.rainbow(np.linspace(0, 1, n))
-        hex_colors = [mcolors.rgb2hex(c) for c in colors_from_cmap]
-        return hex_colors
+        return [mcolors.rgb2hex(c) for c in colors_from_cmap]
     return colors[:n]
 
-def generate_colors(hex_color:str, n:int):
-    """Generate n versions of a given hue by changing lightness and saturation.
+
+def generate_colors(hex_color: str, n: int) -> list:
+    """Generate ``n`` color variants of a base hue by varying lightness and saturation.
 
     Args:
-        hex_color: The base color in hexadecimal format.
-        n: The number of colors to generate.
+        hex_color (str): Base color in ``'#RRGGBB'`` hexadecimal format.
+        n (int): Number of color variants to generate.
 
     Returns:
-        A list of generated color strings in hexadecimal format.
+        list[str]: Generated colors in ``'#RRGGBB'`` hexadecimal format.
     """
-    def hex_to_rgb(hex):
-        return tuple(int(hex[i:i+2], 16) / 255.0 for i in (1, 3, 5))
+    def hex_to_rgb(hex_str):
+        return tuple(int(hex_str[i:i + 2], 16) / 255.0 for i in (1, 3, 5))
 
     def rgb_to_hex(rgb):
-        return f"#{int(rgb[0]*255):02X}{int(rgb[1]*255):02X}{int(rgb[2]*255):02X}"
+        return f"#{int(rgb[0] * 255):02X}{int(rgb[1] * 255):02X}{int(rgb[2] * 255):02X}"
 
     r, g, b = hex_to_rgb(hex_color)
-    
-    # Convert RGB to HSL
     h, l, s = colorsys.rgb_to_hls(r, g, b)
-    
-    step = 0.15
-    start_point = 0.5 - (n*step/2)  - step
-    if start_point < 0:
-        step = 1/(n+2)
-        start_point = step
-    
-    # Generate colors
-    colors = []
-    for i in range(n):
-        # Adjust lightness
-        new_l = min(1, max(0, start_point + step + i*step))
-        
-        # Adjust saturation
-        new_s = min(1, max(0, start_point + step + i*step))
-        new_s = 1 + start_point - new_s
-        new_s = max(0.3, new_s)
-        
-        # Convert back to RGB and then to hex
-        new_rgb = colorsys.hls_to_rgb(h, new_l, new_s)
-        colors.append(rgb_to_hex(new_rgb))
-    
-    return colors
 
-def get_class_per_modality_colors(num_modalities, num_classes):
-    """Return a list of colors per modality per class.
+    step = 0.15
+    start_point = 0.5 - (n * step / 2) - step
+    if start_point < 0:
+        step = 1 / (n + 2)
+        start_point = step
+
+    result = []
+    for i in range(n):
+        new_l = min(1, max(0, start_point + step + i * step))
+        new_s = min(1, max(0, start_point + step + i * step))
+        new_s = max(0.3, 1 + start_point - new_s)
+        result.append(rgb_to_hex(colorsys.hls_to_rgb(h, new_l, new_s)))
+
+    return result
+
+
+def get_class_per_modality_colors(num_modalities: int, num_classes: int) -> list:
+    """Return a flat list of colors for all class-modality combinations.
 
     Args:
-        num_modalities: The number of modalities.
-        num_classes: The number of classes.
+        num_modalities (int): Number of modalities.
+        num_classes (int): Number of classes.
 
     Returns:
-        A list of color strings, where each color corresponds to a unique
-        class-modality pair.
+        list[str]: Colors of length ``num_modalities * num_classes``, ordered
+        by modality then class.
     """
     class_colors = get_colors(num_classes)
     colors_per_modality = list(zip(*[generate_colors(color, num_modalities) for color in class_colors]))
-    colors = [color for modality_color in colors_per_modality for color in modality_color]
-    return colors
+    return [color for modality_color in colors_per_modality for color in modality_color]
+
 
 def plot_2d_projection(
-    technique: Literal['pca'] | Literal['umap'],
+    technique: Literal['pca', 'umap'],
     data,
     labels,
-    labels_colors:  list[str] | None = None,
-    labels_names: list[str] | None = None,
+    labels_colors: list = None,
+    labels_names: list = None,
     standardize: bool = True,
     checkpoint_dir: pathlib.Path = None,
-    is_train: bool | None = None,
-    is_best: bool | None = None,
+    is_train: bool = None,
+    is_best: bool = None,
     save_plot: bool = False,
     figsize: tuple = (8, 8),
     text_size: int = 20,
     alt_save_dir: pathlib.Path = None,
-    alt_filename: str = None
+    alt_filename: str = None,
 ) -> None:
-    """Display and save a 2D PCA or UMAP plot.
+    """Display or save a 2-D dimensionality reduction scatter plot.
 
     Args:
-        technique: The dimensionality reduction technique to use ('pca' or 'umap').
-        data: The input data to be reduced and plotted.
-        labels: The labels for each data point.
-        labels_colors: An optional list of hex color codes for each unique label.
-        labels_names: An optional list of names for each unique label.
-        standardize: Whether to standardize the data before dimensionality reduction.
-        checkpoint_dir: The directory to save the plot to, if `save_plot` is True.
-        is_train: Indicates whether the data is from the training set. Required
-            if `save_plot` is True.
-        is_best: Indicates whether the plot corresponds to the best checkpoint.
-            Required if `save_plot` is True.
-        save_plot: If True, saves the plot to a file; otherwise, displays it.
-        figsize: A tuple specifying the figure size.
-        text_size: The font size for text elements in the plot.
-        alt_save_dir: An alternative directory to save the plot. Overrides
-            `checkpoint_dir` if provided.
-        alt_filename: An alternative filename for the saved plot. Overrides
-            the default naming convention.
+        technique (str): Dimensionality reduction technique.
+            Currently only ``'pca'`` is supported.
+        data (array-like): Input data of shape ``(n_samples, n_features)``.
+        labels (array-like): Integer class label per sample, shape
+            ``(n_samples,)``.
+        labels_colors (list[str], optional): Per-class hex color strings.
+            Falls back to the built-in palette when ``None``.
+        labels_names (list[str], optional): Human-readable class names.
+            Falls back to ``'class {label}'`` when ``None``.
+        standardize (bool): If ``True``, standardises ``data`` with
+            :class:`~sklearn.preprocessing.StandardScaler` before reduction.
+            Defaults to ``True``.
+        checkpoint_dir (pathlib.Path, optional): Checkpoint directory used
+            for building the default save path. Required when
+            ``save_plot=True`` and ``alt_save_dir`` is ``None``.
+        is_train (bool, optional): Whether the data is from the training set.
+            Required when ``save_plot=True``.
+        is_best (bool, optional): Whether the plot corresponds to the best
+            checkpoint. Required when ``save_plot=True``.
+        save_plot (bool): If ``True``, saves the figure as SVG; otherwise
+            displays it interactively. Defaults to ``False``.
+        figsize (tuple[int, int]): Figure size in inches. Defaults to
+            ``(8, 8)``.
+        text_size (int): Font size for axis labels and tick marks.
+            Defaults to ``20``.
+        alt_save_dir (pathlib.Path, optional): Alternative save directory that
+            overrides the default path derived from ``checkpoint_dir``.
+        alt_filename (str, optional): Alternative filename stem (without
+            extension) that overrides the default naming convention.
 
     Raises:
-        ValueError: If `technique` is not 'pca' or 'umap', or if `is_train` or
-            `is_best` is not a boolean when `save_plot` is True.
-        FileNotFoundError: If `checkpoint_dir` does not exist when `save_plot`
-            is True.
+        ValueError: If ``technique`` is not ``'pca'``, or if ``is_train`` or
+            ``is_best`` are not booleans when ``save_plot=True``.
+        FileNotFoundError: If ``checkpoint_dir`` does not exist when
+            ``save_plot=True``.
     """
     if save_plot:
         if not checkpoint_dir.exists():
@@ -320,113 +302,85 @@ def plot_2d_projection(
     if technique == 'pca':
         reducer = PCA(n_components=2)
         reduced_data = reducer.fit_transform(data_scaled)
-        x_label = 'PC1'
-        y_label = 'PC2'
-        title = 'PCA'
-    # elif technique == 'umap':  ### Requires previous version of numpy and causes other mild compatibility issues
-    #     reducer = umap.UMAP(n_neighbors=5, min_dist=0.3, n_components=2)
-    #     reduced_data = reducer.fit_transform(data_scaled)
-    #     x_label = 'UMAP component 1'
-    #     y_label = 'UMAP component 2'
-    #     title = 'UMAP'
+        x_label, y_label = 'PC1', 'PC2'
     else:
         raise ValueError("Valid technique options are 'pca' and 'umap'")
 
     plt.figure(figsize=figsize)
-    
-    # Iterate through unique labels
     unique_labels = set(labels)
     for label in unique_labels:
-        # Determine color
-        if labels_colors:
-            lc = labels_colors[label]
-        else:
-            lc = colors[label]
-        
-        # Determine label name
-        if labels_names:
-            named_label = labels_names[label]
-        else:
-            named_label = f'class {label}'
-        
-        # Create mask for current label
+        lc = labels_colors[label] if labels_colors else colors[label]
+        named_label = labels_names[label] if labels_names else f'class {label}'
         mask = labels == label
-        
-        plt.scatter(
-            reduced_data[mask, 0], 
-            reduced_data[mask, 1], 
-            c=lc, 
-            label=named_label, 
-            s=20
-        )
+        plt.scatter(reduced_data[mask, 0], reduced_data[mask, 1], c=lc, label=named_label, s=20)
 
     plt.xlabel(x_label, fontsize=text_size)
     plt.ylabel(y_label, fontsize=text_size)
     plt.xticks(fontsize=text_size)
     plt.yticks(fontsize=text_size)
-    # plt.title(title, fontsize=text_size)
 
-    if len(unique_labels) < 10:  ### Find better parameter and use also for 3d plots
-        plt.legend(loc='upper right', bbox_to_anchor=(1.4, 1), fontsize=text_size)  # bbox_to_anchor=(1.6, 1)
+    if len(unique_labels) < 10:
+        plt.legend(loc='upper right', bbox_to_anchor=(1.4, 1), fontsize=text_size)
 
     if save_plot:
         if alt_save_dir is not None:
-            if alt_filename is not None:
-                filename = f"{alt_filename}.svg"
-            else:
-                if is_best:
-                    filename = f"{technique}_2d_checkpoint_best.svg"
-                else:
-                    filename = f"{technique}_2d_checkpoint_latest.svg"
+            filename = (
+                f"{alt_filename}.svg" if alt_filename is not None
+                else f"{technique}_2d_checkpoint_{'best' if is_best else 'latest'}.svg"
+            )
             figure_file = alt_save_dir / filename
         else:
             split_name = 'train' if is_train else 'val'
-            if is_best:
-                figure_file = checkpoint_dir / split_name / f"{technique}_2d_checkpoint_best.svg"
-            else:
-                figure_file = checkpoint_dir / split_name / f"{technique}_2d_checkpoint_latest.svg"
+            suffix = 'best' if is_best else 'latest'
+            figure_file = checkpoint_dir / split_name / f"{technique}_2d_checkpoint_{suffix}.svg"
         figure_file.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(figure_file, format='svg', bbox_inches='tight')
         plt.close()
     else:
         plt.show()
 
+
 def plot_3d_projection(
     technique: Literal['pca', 'umap'],
     data,
     labels,
-    labels_colors:  list[str] | None = None,
-    labels_names: list[str] | None = None,
+    labels_colors: list = None,
+    labels_names: list = None,
     standardize: bool = False,
     checkpoint_dir: pathlib.Path = None,
-    is_train: bool | None = None,
+    is_train: bool = None,
     is_best: bool = True,
     save_plot: bool = False,
     width: int = 800,
-    height: int = 800
+    height: int = 800,
 ) -> None:
-    """Display and save a 3D dimensionality reduction plot.
-    
+    """Display or save an interactive 3-D dimensionality reduction plot.
+
     Args:
-        technique: The dimensionality reduction technique to use ('pca' or 'umap').
-        data: The input data to be reduced and plotted.
-        labels: The labels for each data point.
-        labels_colors: An optional list of colors for each unique label.
-        labels_names: An optional list of names for each unique label.
-        standardize: Whether to standardize the data before reduction.
-        checkpoint_dir: The directory to save the plot to, if `save_plot` is True.
-        is_train: Indicates whether the data is from the training set. Required
-            if `save_plot` is True.
-        is_best: Indicates whether the plot corresponds to the best checkpoint.
-        save_plot: If True, saves the plot to a file; otherwise, displays it.
-        width: The width of the plot in pixels.
-        height: The height of the plot in pixels.
+        technique (str): Dimensionality reduction technique.
+            Currently only ``'pca'`` is supported.
+        data (array-like): Input data of shape ``(n_samples, n_features)``.
+        labels (array-like): Integer class label per sample.
+        labels_colors (list[str], optional): Per-class hex color strings.
+        labels_names (list[str], optional): Human-readable class names.
+        standardize (bool): If ``True``, standardises ``data`` before
+            reduction. Defaults to ``False``.
+        checkpoint_dir (pathlib.Path, optional): Checkpoint directory used
+            for the default save path. Required when ``save_plot=True``.
+        is_train (bool, optional): Whether data is from the training set.
+            Required when ``save_plot=True``.
+        is_best (bool): Whether the plot corresponds to the best checkpoint.
+            Defaults to ``True``.
+        save_plot (bool): If ``True``, saves the figure as SVG; otherwise
+            displays it interactively. Defaults to ``False``.
+        width (int): Plot width in pixels. Defaults to ``800``.
+        height (int): Plot height in pixels. Defaults to ``800``.
 
     Raises:
-        ValueError: If `technique` is not 'pca' or 'umap', or if `is_train` is
-            not a boolean when `save_plot` is True.
-        FileNotFoundError: If `checkpoint_dir` does not exist when `save_plot`
-            is True.
+        ValueError: If ``technique`` is not ``'pca'``, or if ``is_train`` or
+            ``is_best`` are not booleans when ``save_plot=True``.
+        FileNotFoundError: If ``checkpoint_dir`` does not exist when
+            ``save_plot=True``.
     """
     if save_plot:
         if not checkpoint_dir.exists():
@@ -445,119 +399,89 @@ def plot_3d_projection(
     if technique == 'pca':
         reducer = PCA(n_components=3)
         reduced_data = reducer.fit_transform(data_scaled)
-        x_label = 'PC1'
-        y_label = 'PC2'
-        z_label = 'PC3'
-        title = 'PCA'
-    # elif technique == 'umap':
-    #     reducer = umap.UMAP(n_neighbors=5, min_dist=0.3, n_components=3)
-    #     reduced_data = reducer.fit_transform(data_scaled)
-    #     x_label = 'UMAP 1'
-    #     y_label = 'UMAP 2'
-    #     z_label = 'UMAP 3'
-    #     title = 'UMAP'
+        x_label, y_label, z_label, title = 'PC1', 'PC2', 'PC3', 'PCA'
     else:
         raise ValueError("technique must be either 'pca' or 'umap'")
 
     fig = go.Figure()
-
-    # Iterate through unique labels
-    unique_labels = list(set(labels))
-    for label in unique_labels:
-        # Determine color
-        if labels_colors:
-            lc = labels_colors[label]
-        else:
-            lc = colors[label]
-        
-        # Determine label name
-        if labels_names:
-            named_label = labels_names[label]
-        else:
-            named_label = f'class {label}'
-        
-        # Create mask for current label
+    for label in list(set(labels)):
+        lc = labels_colors[label] if labels_colors else colors[label]
+        named_label = labels_names[label] if labels_names else f'class {label}'
         mask = labels == label
-        
-        # Add trace for current label
         fig.add_trace(go.Scatter3d(
             x=reduced_data[mask, 0],
             y=reduced_data[mask, 1],
             z=reduced_data[mask, 2],
             mode='markers',
-            marker=dict(
-                size=2,
-                color=lc,
-                opacity=0.8,
-            ),
-            name=named_label
+            marker=dict(size=2, color=lc, opacity=0.8),
+            name=named_label,
         ))
 
     fig.update_layout(
-        scene=dict(
-            xaxis_title=x_label,
-            yaxis_title=y_label,
-            zaxis_title=z_label
-        ),
+        scene=dict(xaxis_title=x_label, yaxis_title=y_label, zaxis_title=z_label),
         margin=dict(r=10, b=10, l=10, t=30),
-        legend=dict(
-            font=dict(size=14),
-            itemsizing='constant'
-        ),
+        legend=dict(font=dict(size=14), itemsizing='constant'),
         title=title,
         width=width,
-        height=height
+        height=height,
     )
 
     if save_plot:
         split_name = 'train' if is_train else 'val'
-        if is_best:
-            figure_file = checkpoint_dir / split_name / f"{technique}_3d_checkpoint_best.svg"
-        else:
-            figure_file = checkpoint_dir / split_name / f"{technique}_3d_checkpoint_latest.svg"
+        suffix = 'best' if is_best else 'latest'
+        figure_file = checkpoint_dir / split_name / f"{technique}_3d_checkpoint_{suffix}.svg"
         figure_file.parent.mkdir(parents=True, exist_ok=True)
         pio.write_image(fig, figure_file)
     else:
         fig.show()
+
 
 def plot_confusion_matrix(
     true_labels,
     pred_labels,
     performance_metrics: bool = False,
     checkpoint_dir: pathlib.Path = None,
-    is_train: bool | None = None,
+    is_train: bool = None,
     is_best: bool = True,
     save_plot: bool = False,
-    figsize = (16, 8),
-    text_size = 20,
-    filename_suffix: str | None = None,
-    alt_save_dir: pathlib.Path = None
+    figsize: tuple = (16, 8),
+    text_size: int = 20,
+    filename_suffix: str = None,
+    alt_save_dir: pathlib.Path = None,
 ) -> None:
-    """Display a confusion matrix.
+    """Display or save a confusion matrix with optional performance metrics.
 
-    This function plots a confusion matrix along with optional precision and
-    recall plots and classification metrics.
+    Plots a colour-coded confusion matrix. When ``performance_metrics=True``,
+    per-class precision and recall bars are appended alongside a text box
+    containing aggregate metrics.
 
     Args:
-        true_labels: Array-like of shape (n_samples,) with true labels.
-        pred_labels: Array-like of shape (n_samples,) with predicted labels.
-        performance_metrics: If True, plots recall and precision as well.
-        checkpoint_dir: The directory to save the plot to, if `save_plot` is True.
-        is_train: Indicates whether the data is from the training set. Required
-            if `save_plot` is True.
-        is_best: Indicates whether the plot corresponds to the best checkpoint.
-        save_plot: If True, saves the plot to a file; otherwise, displays it.
-        figsize: A tuple specifying the figure size.
-        text_size: The font size for text elements in the plot.
-        filename_suffix: An optional suffix to append to the filename.
-        alt_save_dir: An alternative directory to save the plot. Overrides
-            `checkpoint_dir` if provided.
+        true_labels (array-like): Ground-truth labels, shape ``(n_samples,)``.
+        pred_labels (array-like): Predicted labels, shape ``(n_samples,)``.
+        performance_metrics (bool): If ``True``, includes precision, recall,
+            and a metrics text box. Defaults to ``False``.
+        checkpoint_dir (pathlib.Path, optional): Checkpoint directory used for
+            the default save path. Required when ``save_plot=True`` and
+            ``alt_save_dir`` is ``None``.
+        is_train (bool, optional): Whether data is from the training set.
+            Required when ``save_plot=True``.
+        is_best (bool): Whether the plot corresponds to the best checkpoint.
+            Defaults to ``True``.
+        save_plot (bool): If ``True``, saves the figure as SVG; otherwise
+            displays it. Defaults to ``False``.
+        figsize (tuple[int, int]): Figure size in inches.
+            Defaults to ``(16, 8)``.
+        text_size (int): Font size for annotations. Defaults to ``20``.
+        filename_suffix (str, optional): Suffix appended to the output
+            filename (without leading underscore).
+        alt_save_dir (pathlib.Path, optional): Alternative save directory that
+            overrides the default path.
 
     Raises:
-        ValueError: If `is_train` or `is_best` is not a boolean when `save_plot`
-            is True.
-        FileNotFoundError: If `checkpoint_dir` does not exist when `save_plot`
-            is True.
+        ValueError: If ``is_train`` or ``is_best`` are not booleans when
+            ``save_plot=True``.
+        FileNotFoundError: If ``checkpoint_dir`` does not exist when
+            ``save_plot=True``.
     """
     if save_plot:
         if not checkpoint_dir.exists():
@@ -568,304 +492,281 @@ def plot_confusion_matrix(
             raise ValueError("Parameter is_best must be boolean type")
 
     metrics = calc_classification_metrics(true_labels, pred_labels)
-    matrics_text = f"""
-    ACC: {metrics['acc']:.3f}
-    B-ACC: {metrics['bacc']:.3f}
-    JI: {metrics['ji']:.3f}
-    NMI: {metrics['nmi']:.3f}
-    F1: {metrics['f1']:.3f}
-    ARI: {metrics['ari']:.3f}
-    """
+    metrics_text = (
+        f"\n    ACC: {metrics['acc']:.3f}\n"
+        f"    B-ACC: {metrics['bacc']:.3f}\n"
+        f"    JI: {metrics['ji']:.3f}\n"
+        f"    NMI: {metrics['nmi']:.3f}\n"
+        f"    F1: {metrics['f1']:.3f}\n"
+        f"    ARI: {metrics['ari']:.3f}\n    "
+    )
 
     cm = confusion_matrix(true_labels, pred_labels)
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm) #, display_labels=['num'+str(n) for n in range(10)])
-    
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+
     if performance_metrics:
-        # Calculate precision and recall
         precision = np.nan_to_num(np.diag(cm) / np.where(cm.sum(axis=0) > 0, cm.sum(axis=0), 1e-9))
         recall = np.nan_to_num(np.diag(cm) / np.where(cm.sum(axis=1) > 0, cm.sum(axis=1), 1e-9))
-
         num_classes = len(np.unique(true_labels))
 
         fig = plt.figure(figsize=figsize)
         gs = fig.add_gridspec(
             2, 3,
-            width_ratios=[num_classes, 1, num_classes],  # (1-(1/num_classes))
+            width_ratios=[num_classes, 1, num_classes],
             height_ratios=[num_classes, 1],
-            hspace = 0.2,
-            wspace = 0.1
+            hspace=0.2,
+            wspace=0.1,
         )
-    
-        disp.plot(ax=fig.add_subplot(gs[0, 0]), cmap=plt.cm.Blues, text_kw={'fontsize': text_size}, colorbar=False)
+
+        disp.plot(ax=fig.add_subplot(gs[0, 0]), cmap=plt.cm.Blues,
+                  text_kw={'fontsize': text_size}, colorbar=False)
         disp.ax_.set_aspect('equal')
-        # disp.ax_.set_title('Confusion Matrix', fontsize=text_size)
-        disp.ax_.tick_params(axis='both', which='major', labelsize=text_size)  # Increase tick label size
+        disp.ax_.tick_params(axis='both', which='major', labelsize=text_size)
         disp.ax_.xaxis.label.set_size(text_size)
         disp.ax_.yaxis.label.set_size(text_size)
-    
-        # Add precision plot
+
         ax_precision = fig.add_subplot(gs[1, 0])
-        precision_2d = precision.reshape(1, -1)
-        ax_precision.imshow(precision_2d, cmap=plt.cm.Blues, aspect='equal', vmin=0, vmax=1)
+        ax_precision.imshow(precision.reshape(1, -1), cmap=plt.cm.Blues, aspect='equal', vmin=0, vmax=1)
         for j, v in enumerate(precision):
-            ax_precision.text(j, 0, f'{v:.2f}', ha='center', va='center', fontsize=text_size, color='white' if v > 0.7 else 'black')  # plt.cm.Blues(1)
+            ax_precision.text(j, 0, f'{v:.2f}', ha='center', va='center',
+                              fontsize=text_size, color='white' if v > 0.7 else 'black')
         ax_precision.set_xticks([])
         ax_precision.set_yticks([])
         ax_precision.set_xlabel('Precision', fontsize=text_size)
 
-        # Add recall plot
         ax_recall = fig.add_subplot(gs[0, 1])
-        recall_2d = recall.reshape(-1, 1)
-        ax_recall.imshow(recall_2d, cmap=plt.cm.Blues, aspect='equal', vmin=0, vmax=1)
+        ax_recall.imshow(recall.reshape(-1, 1), cmap=plt.cm.Blues, aspect='equal', vmin=0, vmax=1)
         for i, v in enumerate(recall):
-            ax_recall.text(0, i, f'{v:.2f}', ha='center', va='center', fontsize=text_size, color='white' if v > 0.7 else 'black')
+            ax_recall.text(0, i, f'{v:.2f}', ha='center', va='center',
+                           fontsize=text_size, color='white' if v > 0.7 else 'black')
         ax_recall.set_yticks([])
         ax_recall.set_xticks([])
         ax_recall.set_xlabel('Recall', fontsize=text_size)
-    
-        # Metrics
+
         ax_metrics = fig.add_subplot(gs[0:2, 2])
-        ax_metrics.text(0.5, 0.5, matrics_text, fontsize=text_size, color='black', ha='right', va='center', wrap=True)
+        ax_metrics.text(0.5, 0.5, metrics_text, fontsize=text_size, color='black',
+                        ha='right', va='center', wrap=True)
         ax_metrics.set_xticks([])
         ax_metrics.set_yticks([])
         ax_metrics.set_frame_on(False)
     else:
-        fig, axs = plt.subplots(1, 2, figsize=figsize, gridspec_kw={'width_ratios': (4,1)})
+        fig, axs = plt.subplots(1, 2, figsize=figsize, gridspec_kw={'width_ratios': (4, 1)})
         disp.plot(ax=axs[0], cmap=plt.cm.Blues, text_kw={'fontsize': text_size}, colorbar=False)
-        # axs[0].set_title('Confusion Matrix', fontsize=text_size)
         axs[0].xaxis.label.set_size(text_size)
         axs[0].yaxis.label.set_size(text_size)
         axs[0].tick_params(axis='both', which='major', labelsize=12)
-        axs[1].text(0.5, 0.5, matrics_text, fontsize=text_size, color='black', ha='right', va='center', wrap=True)
+        axs[1].text(0.5, 0.5, metrics_text, fontsize=text_size, color='black',
+                    ha='right', va='center', wrap=True)
         axs[1].set_axis_off()
-    
         plt.tight_layout()
 
     if save_plot:
-        if alt_save_dir is not None:
-            save_dir = alt_save_dir
-        else:
-            split_name = 'train' if is_train else 'val'
-            save_dir = checkpoint_dir / split_name 
-        
-        if filename_suffix is None:
-            suffix = ''
-        else:
-            suffix = f"_{filename_suffix}"
-        
-        if is_best:
-            figure_file = save_dir / f"confusion_matrix_checkpoint_best{suffix}.svg"
-        else:
-            figure_file = save_dir / f"confusion_matrix_checkpoint_latest{suffix}.svg"
-        
+        save_dir = alt_save_dir if alt_save_dir is not None else (
+            checkpoint_dir / ('train' if is_train else 'val')
+        )
+        suffix = f"_{filename_suffix}" if filename_suffix else ''
+        chk = 'best' if is_best else 'latest'
+        figure_file = save_dir / f"confusion_matrix_checkpoint_{chk}{suffix}.svg"
         figure_file.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(figure_file, format = 'svg', bbox_inches = 'tight')  ### dpi=300
+        plt.savefig(figure_file, format='svg', bbox_inches='tight')
         plt.close()
     else:
         plt.show()
 
+
 def checkpoint_report_plots(
     checkpoint_dir: pathlib.Path,
-    datasets: list[torch.utils.data.Dataset],
+    datasets: list,
     is_train: bool,
     use_best: bool = True,
-    num_samples: int | None = None
+    num_samples: int = None,
 ) -> None:
-    """Save checkpoint log, 2D pca, and confusion matrices.
+    """Generate and save a full set of diagnostic plots for a checkpoint.
 
-    This function generates and saves a series of plots to a specified
-    checkpoint directory, including a training log plot, 2D and 3D PCA
-    projections of the latent space, and various confusion matrices.
+    Saves a training-log curve, 2-D and 3-D PCA projections of the latent
+    space, and confusion matrices (overall and per-modality) to
+    ``checkpoint_dir``.
 
     Args:
-        checkpoint_dir: The path to the directory containing the model
-            checkpoint and configuration files.
-        datasets: A list of `torch.utils.data.Dataset` objects, one for each
+        checkpoint_dir (pathlib.Path): Directory containing the checkpoint
+            file and ``config.yaml``.
+        datasets (list[torch.utils.data.Dataset]): Source datasets, one per
             modality.
-        is_train: A boolean indicating whether to generate plots for the
-            training or validation set.
-        use_best: A boolean indicating whether to use the 'best' or 'latest'
-            checkpoint file.
-        num_samples: An optional integer specifying the number of samples
-            to use for plotting. If None, all samples are used.
+        is_train (bool): If ``True``, plots are tagged as training-set
+            results; otherwise as validation-set results.
+        use_best (bool): If ``True``, loads ``checkpoint_best.pth``;
+            otherwise loads ``checkpoint_latest.pth``.
+            Defaults to ``True``.
+        num_samples (int, optional): Maximum number of samples to use per
+            modality. If ``None``, all samples are used.
 
     Raises:
-        NotADirectoryError: If the checkpoint path does not exist.
+        NotADirectoryError: If ``checkpoint_dir`` does not exist.
         FileNotFoundError: If the specified checkpoint file does not exist.
     """
     config = load_config(checkpoint_dir / 'config.yaml')
-    checkpoint_file = checkpoint_dir / f"{'checkpoint_best.pth' if use_best else 'checkpoint_latest.pth'}"
+    chk_name = 'checkpoint_best.pth' if use_best else 'checkpoint_latest.pth'
+    checkpoint_file = checkpoint_dir / chk_name
     num_modalities = len(config.modalities)
     modality_names = [m.name for m in config.modalities]
 
     if not checkpoint_dir.exists():
         raise NotADirectoryError("Checkpoint path doesn't exist")
-
     if not checkpoint_file.exists():
-        raise FileNotFoundError("There is not a best checkpoint file on this path.")
+        raise FileNotFoundError("The specified checkpoint file does not exist.")
 
     plot_training_log(
-        training_mode = config.training_mode,
-        modality_names = modality_names,
-        checkpoint_dir = checkpoint_dir,
-        use_best = use_best,
-        save_plot = True
+        training_mode=config.training_mode,
+        modality_names=modality_names,
+        checkpoint_dir=checkpoint_dir,
+        use_best=use_best,
+        save_plot=True,
     )
 
     model = Model(config)
     model.load_from_checkpoint(checkpoint_file, verbose=False)
 
     dataloaders = get_dataloaders(datasets, batch_size=config.batch_size, drop_last=False, shuffle=True)
+    x, y = list(zip(*[
+        get_samples_from_dataloader(dl, num_samples=num_samples, device=config.device)
+        for dl in dataloaders
+    ]))
 
-    # Prepare required variables
-
-    x, y = list(zip(*[get_samples_from_dataloader(dataloader, num_samples=num_samples, device=config.device) for dataloader in dataloaders]))
-
-    # Remove unlabeled samples
     if config.training_mode == 'semisupervised':
-        x = list(x)
-        y = list(y)
+        x, y = list(x), list(y)
         for i in range(num_modalities):
-            labeled_mask = torch.tensor([True if label != -1 else False for label in y[i]])
+            labeled_mask = torch.tensor([label != -1 for label in y[i]])
             x[i] = x[i][labeled_mask]
             y[i] = y[i][labeled_mask]
 
-    total_labeled_samples = sum([len(ds) for ds in y])
-    if total_labeled_samples == 0:
-        print("At least some labeled samples are needed for plotting the projections and confusion matrices")
+    if sum(len(ds) for ds in y) == 0:
+        print("At least some labeled samples are needed for plotting.")
         return
 
-    # Latents
     modal_latents = [model.get_latents(x[i], input_modality=i) for i in range(num_modalities)]
     latents = torch.concat(modal_latents, dim=0).cpu().numpy()
 
-    # Labels
     class_labels = torch.concat(y, dim=0).cpu().numpy()
-    modality_labels = torch.concat([torch.full((x[i].shape[0],), i) for i in range(num_modalities)], dim=0).numpy()
-    class_per_modality_labels = [cl + mi*config.num_classes for mi, modality_class_labels in enumerate(y) for cl in modality_class_labels.cpu().numpy()]  ####### Assuming equal number of classes per modality
+    modality_labels = torch.concat(
+        [torch.full((x[i].shape[0],), i) for i in range(num_modalities)], dim=0
+    ).numpy()
+    class_per_modality_labels = [
+        cl + mi * config.num_classes
+        for mi, modality_class_labels in enumerate(y)
+        for cl in modality_class_labels.cpu().numpy()
+    ]
 
-    # Colors
-    # modality_colors = get_class_per_modality_colors(num_modalities=1, num_classes=num_modalities)
-    # class_colors = get_class_per_modality_colors(num_modalities=1, num_classes=config.num_classes)
-    class_per_modality_colors = get_class_per_modality_colors(num_modalities=num_modalities, num_classes=config.num_classes)
-
-    # Names
-    modality_names = [f"{config.modalities[i].name}" for i in range(num_modalities)]
-    # class_names = [i for i in range(config.num_classes)]
-    class_per_modality_names = [f"{config.modalities[mi].name}_{ci}" for mi in range(num_modalities) for ci in range(config.num_classes)]
-
-    # Plot projections
+    class_per_modality_colors = get_class_per_modality_colors(
+        num_modalities=num_modalities, num_classes=config.num_classes
+    )
+    class_per_modality_names = [
+        f"{config.modalities[mi].name}_{ci}"
+        for mi in range(num_modalities)
+        for ci in range(config.num_classes)
+    ]
 
     plot_2d_projection(
-        technique = 'pca',
-        data = latents,
-        labels = class_per_modality_labels,
-        labels_colors = class_per_modality_colors,
-        labels_names = class_per_modality_names,
-        standardize = False,
-        checkpoint_dir = checkpoint_dir,
-        is_train = is_train,
-        is_best = use_best,
-        save_plot = True,
-        text_size = 26
+        technique='pca',
+        data=latents,
+        labels=class_per_modality_labels,
+        labels_colors=class_per_modality_colors,
+        labels_names=class_per_modality_names,
+        standardize=False,
+        checkpoint_dir=checkpoint_dir,
+        is_train=is_train,
+        is_best=use_best,
+        save_plot=True,
+        text_size=26,
     )
 
     plot_3d_projection(
-        technique = 'pca',
-        data = latents,
-        labels = class_per_modality_labels,
-        labels_colors = class_per_modality_colors,
-        labels_names = class_per_modality_names,
-        standardize = False,
-        checkpoint_dir = checkpoint_dir,
-        is_train = is_train,
-        is_best = use_best,
-        save_plot = True
+        technique='pca',
+        data=latents,
+        labels=class_per_modality_labels,
+        labels_colors=class_per_modality_colors,
+        labels_names=class_per_modality_names,
+        standardize=False,
+        checkpoint_dir=checkpoint_dir,
+        is_train=is_train,
+        is_best=use_best,
+        save_plot=True,
     )
 
-    # Plot confusion matrices
-
-    class_pred, modality_pred = model.discriminator.predict(torch.tensor(latents).to(config.device), include_modality_pred=True)#.cpu().numpy()
+    class_pred, modality_pred = model.discriminator.predict(
+        torch.tensor(latents).to(config.device), include_modality_pred=True
+    )
     class_pred = class_pred.cpu().numpy()
     modality_pred = modality_pred.cpu().numpy()
     class_per_modality_labels_pred = np.array([
-        class_pred + modality * config.num_classes
-        for class_pred, modality in zip(class_pred, modality_pred)
+        cp + mp * config.num_classes
+        for cp, mp in zip(class_pred, modality_pred)
     ])
 
     plot_confusion_matrix(
-        class_labels,
-        class_pred,
-        performance_metrics = True,
-        checkpoint_dir = checkpoint_dir,
-        is_train = is_train,
-        is_best = use_best,
-        save_plot = True,
-        figsize = (16, 10),
-        text_size = 25
+        class_labels, class_pred,
+        performance_metrics=True,
+        checkpoint_dir=checkpoint_dir,
+        is_train=is_train, is_best=use_best,
+        save_plot=True, figsize=(16, 10), text_size=25,
     )
 
-    # Class per modality
     plot_confusion_matrix(
-        class_per_modality_labels,
-        class_per_modality_labels_pred,
-        performance_metrics = True,
-        checkpoint_dir = checkpoint_dir,
-        is_train = is_train,
-        is_best = use_best,
-        save_plot = True,
-        figsize = (40, 20),
-        text_size = 25,
-        filename_suffix = 'class_per_modality'
+        class_per_modality_labels, class_per_modality_labels_pred,
+        performance_metrics=True,
+        checkpoint_dir=checkpoint_dir,
+        is_train=is_train, is_best=use_best,
+        save_plot=True, figsize=(40, 20), text_size=25,
+        filename_suffix='class_per_modality',
     )
 
     for i in range(num_modalities):
         plot_confusion_matrix(
             class_labels[modality_labels == i],
             class_pred[modality_labels == i],
-            performance_metrics = True,
-            checkpoint_dir = checkpoint_dir,
-            is_train = is_train,
-            is_best = use_best,
-            save_plot = True,
-            figsize = (16, 10),
-            text_size = 25,
-            filename_suffix = f'modality_{modality_names[i]}'
+            performance_metrics=True,
+            checkpoint_dir=checkpoint_dir,
+            is_train=is_train, is_best=use_best,
+            save_plot=True, figsize=(16, 10), text_size=25,
+            filename_suffix=f'modality_{modality_names[i]}',
         )
 
+
 def calc_reconstruction_and_translation_mse(
-    x: list[torch.Tensor],
+    x: list,
     model,
     save_plot: bool = False,
     save_dir: pathlib.Path = pathlib.Path('.'),
-    suffix: str | None = None,
+    suffix: str = None,
     text_size: int = 30,
     vmin: float = 0,
-    vmax: float = 0.1
-):
-    """Calculates and plots a heat map of reconstruction and translation MSE.
+    vmax: float = 0.1,
+) -> None:
+    """Compute and plot a heatmap of reconstruction and translation MSE.
 
-    This function computes the mean squared error (MSE) between original data
-    and its reconstructed/translated versions across all modalities and plots
-    the results as a heat map.
+    For each pair of input and output modalities, computes the mean squared
+    error between the original data and the model's reconstructed or
+    translated version, then displays the results as a colour-coded heatmap.
 
     Args:
-        x: A list of `torch.Tensor` objects, where each tensor contains data
-            for one modality.
-        model: The trained model used for reconstruction and translation.
-        save_plot: If True, saves the plot to a file; otherwise, displays it.
-        save_dir: The directory to save the plot to, if `save_plot` is True.
-        suffix: An optional suffix to append to the filename.
-        text_size: The font size for text elements in the plot.
-        vmin: The minimum value for the color scale of the heat map.
-        vmax: The maximum value for the color scale of the heat map.
+        x (list[torch.Tensor]): Per-modality input tensors.
+        model: The trained :class:`~modis.nn.Model`.
+        save_plot (bool): If ``True``, saves the figure as SVG; otherwise
+            displays it. Defaults to ``False``.
+        save_dir (pathlib.Path): Directory to save the figure when
+            ``save_plot=True``. Defaults to the current directory.
+        suffix (str, optional): Suffix appended to the output filename.
+        text_size (int): Font size for annotations. Defaults to ``30``.
+        vmin (float): Minimum value for the heatmap colour scale.
+            Defaults to ``0``.
+        vmax (float): Maximum value for the heatmap colour scale.
+            Defaults to ``0.1``.
 
     Raises:
-        FileNotFoundError: If `save_dir` does not exist when `save_plot` is True.
+        FileNotFoundError: If ``save_dir`` does not exist when
+            ``save_plot=True``.
     """
-    if save_plot:
-        if not save_dir.exists():
-            raise FileNotFoundError(f"Checkpoint dir {save_dir} doesn't exist.")
+    if save_plot and not save_dir.exists():
+        raise FileNotFoundError(f"Save directory {save_dir} doesn't exist.")
 
     num_modalities = len(x)
 
@@ -874,35 +775,37 @@ def calc_reconstruction_and_translation_mse(
         translations[input_modality] = {}
         for output_modality in range(num_modalities):
             translations[input_modality][output_modality] = model.translate(
-                                                                x[input_modality],
-                                                                input_modality=input_modality,
-                                                                output_modality=output_modality
+                x[input_modality],
+                input_modality=input_modality,
+                output_modality=output_modality,
             )
 
     mse_matrix = np.zeros((num_modalities, num_modalities))
     for ii in range(num_modalities):
         for it in range(num_modalities):
-            mse_matrix[ii, it] = np.mean((translations[ii][it] - x[it].cpu().numpy())**2)
+            mse_matrix[ii, it] = np.mean(
+                (translations[ii][it] - x[it].cpu().numpy()) ** 2
+            )
 
     plt.figure(figsize=(8, 7))
-    ax = sns.heatmap(mse_matrix, annot=True, fmt=".3f", cmap="coolwarm", linewidths=0.5, cbar=True, annot_kws={"size": text_size}, vmin=vmin, vmax=vmax)
+    ax = sns.heatmap(
+        mse_matrix, annot=True, fmt=".3f", cmap="coolwarm",
+        linewidths=0.5, cbar=True, annot_kws={"size": text_size},
+        vmin=vmin, vmax=vmax,
+    )
 
     plt.xlabel("output modality", fontsize=text_size)
     plt.ylabel("input modality", fontsize=text_size)
-
-    ticks = [str(i+1) for i in range(num_modalities)]
+    ticks = [str(i + 1) for i in range(num_modalities)]
     ax.set_xticklabels(ticks, fontsize=text_size)
     ax.set_yticklabels(ticks, fontsize=text_size)
 
-    # plt.title("MSE Heatmap", fontsize=text_size)
-
-    # Customize colorbar
     cbar = ax.collections[0].colorbar
     cbar.ax.tick_params(labelsize=text_size)
 
     if save_plot:
-        figure_file = save_dir / f"reconstruction_translation_mse_matrix{suffix if suffix is not None else ''}.svg"
-        plt.savefig(figure_file, format='svg', bbox_inches='tight')
+        fname = f"reconstruction_translation_mse_matrix{suffix if suffix else ''}.svg"
+        plt.savefig(save_dir / fname, format='svg', bbox_inches='tight')
         plt.close()
     else:
         plt.show()
