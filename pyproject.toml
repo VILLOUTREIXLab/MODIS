@@ -4,26 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "modis"
-version = "0.0.1"
+version = "0.1.0"
 description = "Multimodal data integration"
 authors = [{ name = "Daniel", email = "dlsoltero@gmail.com" }]
 readme = "README.md"
 license = { text = "MIT" }
-dependencies = [
-    "torch",
-    "jupyterlab",
-    "omegaconf",
-    "numpy",
-    "scikit-learn",
-    "pandas",
-    "matplotlib",
-    "plotly",
-    "kaleido",
-    "seaborn",
-    "tensorboard",
-    "standard-imghdr"
-]
+
+dynamic = ["dependencies"]
 
 [tool.setuptools.packages.find]
 include = ["modis", "modis.*"]
 where = ["."]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
