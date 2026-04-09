@@ -3,3 +3,5 @@ data
 **/*.pyc
 **/.ipynb_checkpoints
 saved
+!example/data
+docs/build/
