@@ -11,7 +11,7 @@ python3 -m venv env
 source env/bin/activate
 ```
 
-After activating the virtual environment, navigate into the `modis` foldier in the downloaded repository, and install MODIS with:
+After activating the virtual environment, navigate into the `MODIS` foldier in the downloaded repository, and install MODIS with:
 
 ```bash
 pip install .
