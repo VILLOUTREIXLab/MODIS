@@ -314,6 +314,8 @@ class Trainer:
             ]
             d_aux_acc = sum(modal_acc) / len(modal_acc) if modal_acc else None
 
+        d_aux_acc = d_aux_acc if d_aux_acc != None else 0.0
+
         recon_losses_modal = [self.mse_loss(recon_x[i], x[i]) for i in range(num_modalities)]
         recon_loss = sum(recon_losses_modal)
 
