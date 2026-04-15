@@ -12,7 +12,7 @@ from collections import Counter, defaultdict
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset, Subset
+from torch.utils.data import Dataset, Subset, DataLoader
 
 
 class PartiallyLabeledDataset(Dataset):
@@ -66,8 +66,11 @@ class PartiallyLabeledDataset(Dataset):
         self.dataset = dataset
 
         if num_random_samples is not None:
-            assert num_random_samples <= len(dataset), \
-                f"Dataset only has {len(dataset)} samples"
+            if num_random_samples > len(dataset):
+                raise ValueError(
+                    f"num_random_samples ({num_random_samples}) exceeds "
+                    f"dataset size ({len(dataset)})"
+                )
             random_dataset = rng.choice(range(len(self.dataset)), size=num_random_samples, replace=False)
             self.dataset = Subset(dataset, random_dataset)
 
@@ -76,10 +79,10 @@ class PartiallyLabeledDataset(Dataset):
 
         if labeled_samples_ratio is not None:
             num_labeled = int(total_samples * labeled_samples_ratio)
-            self.labeled_indices = set(all_indices[:num_labeled])
+            self.labeled_indices = set(all_indices[:num_labeled].tolist())
 
         elif labeled_samples is not None:
-            self.labeled_indices = set(all_indices[:labeled_samples])
+            self.labeled_indices = set(all_indices[:labeled_samples].tolist())
 
         elif labeled_class_samples is not None or labeled_class_samples_ratio is not None:
             class_indices = dict()
@@ -88,10 +91,10 @@ class PartiallyLabeledDataset(Dataset):
                     class_indices[label] = []
                 class_indices[label].append(i)
 
-            self.labeled_indices = []
+            labeled_list = []
             for label in class_indices:
                 if labeled_class_samples is not None:
-                    if type(labeled_class_samples) == list:
+                    if isinstance(labeled_class_samples, list):
                         num_labeled = (
                             labeled_class_samples[label]
                             if labeled_class_samples[label] is not None
@@ -100,7 +103,7 @@ class PartiallyLabeledDataset(Dataset):
                     else:
                         num_labeled = labeled_class_samples
                 else:
-                    if type(labeled_class_samples_ratio) == list:
+                    if isinstance(labeled_class_samples_ratio, list):
                         num_labeled = (
                             int(len(class_indices[label]) * labeled_class_samples_ratio[label])
                             if labeled_class_samples_ratio[label] is not None
@@ -108,12 +111,13 @@ class PartiallyLabeledDataset(Dataset):
                         )
                     else:
                         num_labeled = int(len(class_indices[label]) * labeled_class_samples_ratio)
-                self.labeled_indices.extend(random.sample(class_indices[label], num_labeled))
+                labeled_list.extend(random.sample(class_indices[label], num_labeled))
+            self.labeled_indices = set(labeled_list)
         else:
-            self.labeled_indices = set(all_indices)
+            self.labeled_indices = set(all_indices.tolist())
 
-        if type(remove_unlabeled) == list:
-            keep = self.labeled_indices + [
+        if isinstance(remove_unlabeled, list):
+            keep = list(self.labeled_indices) + [
                 i for i, (_, label) in enumerate(self.dataset)
                 if i not in self.labeled_indices and label not in remove_unlabeled
             ]
@@ -121,7 +125,7 @@ class PartiallyLabeledDataset(Dataset):
             total_samples = len(self.dataset)
             self.labeled_indices = set(range(len(self.labeled_indices)))
         elif remove_unlabeled is True:
-            self.dataset = Subset(self.dataset, self.labeled_indices)
+            self.dataset = Subset(self.dataset, list(self.labeled_indices))
             total_samples = len(self.dataset)
             self.labeled_indices = set(range(total_samples))
 
@@ -171,57 +175,103 @@ def get_dataloaders(
     return dataloaders
 
 
-def summarize_dataset(dataloaders: list, modality_names: list = None) -> None:
-    """Print sample counts and class distributions for a list of DataLoaders.
+def _print_summary(stats: dict):
+    """Helper to format the dictionary output for the console."""
+    for mod, data in stats["modalities"].items():
+        print(f"--- {mod} ---")
+        print(f"samples: {data['sample_count']}")
+        print(f"distribution: {data['class_distribution']}\n")
+
+    g = stats["global"]
+    print(f"=== global totals ===")
+    print(f"total samples: {g['total_samples']}")
+    print(f"global distribution: {g['total_class_distribution']}")
+    if "labeled_ratio" in g:
+        print(f"labeled ratio: {g['labeled_ratio']}")
+
+
+def summarize_dataset(dataloaders: list, modality_names: list = None, verbose: bool = True) -> dict:
+    """Summarizes sample counts and class distributions across multiple dataloaders.
+
+    This function iterates through a list of PyTorch DataLoaders, extracts labels
+    from the underlying datasets, and computes both per-modality and global
+    class distributions. It also calculates a labeled ratio if unlabeled samples
+    (marked as -1) are present.
 
     Args:
-        dataloaders (list[torch.utils.data.DataLoader]): DataLoaders to
-            summarise. Each must wrap a labeled dataset.
-        modality_names (list[str], optional): Display names for each modality.
-            If ``None``, modalities are identified by their index.
+        dataloaders (list[DataLoader]): A list of PyTorch DataLoader objects to summarize.
+        modality_names (list[str], optional): Custom names for each modality. 
+            Defaults to None, which generates names like "modality_0", "modality_1", etc.
+        verbose (bool, optional): If True, prints a formatted summary to the console. 
+            Defaults to True.
+
+    Returns:
+        dict: A nested dictionary containing:
+            - 'modalities': Per-modality sample counts and class distributions.
+            - 'global': Aggregated totals across all dataloaders, including 
+              'total_samples', 'total_class_distribution', and optionally 'labeled_ratio'.
 
     Raises:
-        AssertionError: If ``modality_names`` is provided but its length does
-            not match the number of dataloaders, or if any element of
-            ``dataloaders`` is not a :class:`~torch.utils.data.DataLoader`.
+        AssertionError: If the length of `modality_names` does not match `dataloaders`,
+            or if any item in `dataloaders` is not a PyTorch DataLoader.
+
+    Note:
+        The function assumes the dataset within the DataLoader returns a tuple 
+        where the second element (index 1) is the label.
     """
     if modality_names:
         assert len(modality_names) == len(dataloaders), \
             "The dataloaders and modality names provided should have the same length"
+    else:
+        modality_names = [f"modality_{i}" for i in range(len(dataloaders))]
 
-    if modality_names is None:
-        modality_names = list(range(len(dataloaders)))
+    stats = {
+        "modalities": {},
+        "global": {}
+    }
 
-    total_samples = Counter()
+    total_counter = Counter()
+
     for i, dataloader in enumerate(dataloaders):
-        assert isinstance(dataloader, torch.utils.data.DataLoader), \
-            "You must provide a list of PyTorch DataLoaders"
+        assert isinstance(dataloader, DataLoader), "items must be PyTorch DataLoaders"
 
+        # Extract labels: handles Tensors or raw scalars
         dataset = dataloader.dataset
-        class_counter = Counter([
-            data[1].tolist() if isinstance(data[1], torch.Tensor) else data[1]
+        labels = [
+            data[1].item() if isinstance(data[1], torch.Tensor) else data[1]
             for data in dataset
-        ])
-        total_samples += class_counter
+        ]
 
-        sorted_class_counter = dict(sorted(class_counter.items()))
-        print(f"Dataset {modality_names[i]} ({sum(sorted_class_counter.values())} samples)")
-        print(f"Samples per class: {sorted_class_counter}")
-        print()
+        class_counts = dict(sorted(Counter(labels).items()))
+        total_samples = sum(class_counts.values())
 
-    sorted_total_samples = dict(sorted(total_samples.items()))
-    print(f"Total samples: {sum(sorted_total_samples.values())}: {sorted_total_samples}")
+        # Store modality-specific data
+        mod_name = modality_names[i]
+        stats["modalities"][mod_name] = {
+            "sample_count": total_samples,
+            "class_distribution": class_counts
+        }
 
-    if -1 in sorted_total_samples:
-        num_labeled = sum(
-            sorted_total_samples[label]
-            for label in sorted_total_samples
-            if label != -1
-        )
-        print(
-            f"Global labeled samples ratio: "
-            f"{round(num_labeled / sum(sorted_total_samples.values()), 3)}"
-        )
+        total_counter.update(class_counts)
+
+    # Global Calculations
+    sorted_total = dict(sorted(total_counter.items()))
+    total_sum = sum(sorted_total.values())
+
+    stats["global"] = {
+        "total_samples": total_sum,
+        "total_class_distribution": sorted_total
+    }
+
+    # Handle unlabeled data (-1 convention)
+    if -1 in sorted_total:
+        labeled_count = sum(v for k, v in sorted_total.items() if k != -1)
+        stats["global"]["labeled_ratio"] = round(labeled_count / total_sum, 3)
+
+    if verbose:
+        _print_summary(stats)
+
+    return stats
 
 
 def get_samples_from_dataloader(
