@@ -72,6 +72,7 @@ class Trainer:
         config,
         log: list,
         save_path: pathlib.Path,
+        checkpoint_path: pathlib.Path | None = None,
         is_best: bool = False,
         verbose: bool = True,
     ) -> pathlib.Path:
@@ -110,9 +111,12 @@ class Trainer:
             'optimizer_state': self.optimizer.state_dict(),
         }
 
-        checkpoint_dir = (
-            save_path / "checkpoints" / config.dataset_name / config.model_name / timestamp
-        )
+        if checkpoint_path is None:
+            checkpoint_dir = (
+                save_path / "checkpoints" / config.dataset_name / config.model_name / timestamp
+            )
+        else:
+            checkpoint_dir = checkpoint_path
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
         if is_best:

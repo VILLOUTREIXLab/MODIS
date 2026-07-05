@@ -55,6 +55,7 @@ def train_loop(
     train_datasets: list,
     val_datasets: list = None,
     show_dataset_summary: bool = True,
+    checkpoint_path=None,
     read_args: bool = True,
 ) -> Path:
     """Execute the core epoch-based training loop.
@@ -208,6 +209,7 @@ def train_loop(
                 config=config,
                 log=log,
                 save_path=save_path,
+                checkpoint_path=checkpoint_path,
                 is_best=True,
                 verbose=False,
             )
@@ -226,6 +228,7 @@ def train_loop(
             config=config,
             log=log,
             save_path=save_path,
+            checkpoint_path=checkpoint_path,
             is_best=False,
         )
 
@@ -244,6 +247,7 @@ def train(
     show_dataset_summary: bool = True,
     run_evaluation: bool = True,
     generate_plots: bool = True,
+    checkpoint_path: Path | None = None,
     read_args: bool = True,
 ) -> Path:
     """Orchestrate the complete MODIS training workflow.
@@ -276,6 +280,7 @@ def train(
         train_datasets=train_datasets,
         val_datasets=val_datasets,
         show_dataset_summary=show_dataset_summary,
+        checkpoint_path=checkpoint_path,
         read_args=read_args,
     )
 
