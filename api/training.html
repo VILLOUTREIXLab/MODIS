@@ -1,0 +1,894 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="Utilities (modis.utils)" href="utils.html"><link rel="prev" title="Neural Network (modis.nn)" href="nn.html">
+
+    <!-- Generated with Sphinx 8.2.3 and Furo 2025.12.19 -->
+        <title>Training (modis.training) - MODIS Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">MODIS Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  <span class="sidebar-brand-text">MODIS Documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart.html">Quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">User Guide</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../userguide/overview.html">Architecture Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../userguide/configuration.html">Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../userguide/datasets.html">Preparing Datasets</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../userguide/training.html">Training</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../userguide/evaluation.html">Evaluation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../userguide/model_selection.html">Hyperparameter Search</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../userguide/checkpoints.html">Checkpoints</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="nn.html">Neural Network (<code class="docutils literal notranslate"><span class="pre">modis.nn</span></code>)</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">Training (<code class="docutils literal notranslate"><span class="pre">modis.training</span></code>)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="utils.html">Utilities (<code class="docutils literal notranslate"><span class="pre">modis.utils</span></code>)</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Development</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing</a></li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/training.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div>
+<div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="training-modis-training">
+<span id="api-training"></span><h1>Training (<code class="docutils literal notranslate"><span class="pre">modis.training</span></code>)<a class="headerlink" href="#training-modis-training" title="Link to this heading">¶</a></h1>
+<p>This section documents the training orchestration layer: the
+<a class="reference internal" href="#modis.training.Trainer" title="modis.training.Trainer"><code class="xref py py-class docutils literal notranslate"><span class="pre">Trainer</span></code></a> class, the epoch-based training loop
+functions, and the loss functions used during training.</p>
+<section id="top-level-functions">
+<h2>Top-Level Functions<a class="headerlink" href="#top-level-functions" title="Link to this heading">¶</a></h2>
+<p>These functions are importable directly from <code class="docutils literal notranslate"><span class="pre">modis</span></code>:</p>
+<dl class="py function">
+<dt class="sig sig-object py" id="modis.train.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_datasets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_datasets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_dataset_summary</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">run_evaluation</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">generate_plots</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">checkpoint_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/train.html#train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.train.train" title="Link to this definition">¶</a></dt>
+<dd><p>Orchestrate the complete MODIS training workflow.</p>
+<p>Calls <a class="reference internal" href="#modis.train.train_loop" title="modis.train.train_loop"><code class="xref py py-func docutils literal notranslate"><span class="pre">train_loop()</span></code></a> and optionally runs checkpoint evaluation and
+diagnostic plot generation afterwards.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>config</strong> (<em>omegaconf.DictConfig</em>) – Training configuration object.</p></li>
+<li><p><strong>train_datasets</strong> (<em>list</em><em>[</em><em>torch.utils.data.Dataset</em><em>]</em>) – Training datasets,
+one per modality.</p></li>
+<li><p><strong>val_datasets</strong> (<em>list</em><em>[</em><em>torch.utils.data.Dataset</em><em>]</em><em>, </em><em>optional</em>) – Validation
+datasets, one per modality. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>show_dataset_summary</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, prints dataset summaries
+before training. Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>run_evaluation</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, evaluates saved checkpoints on
+both training and validation datasets after training.
+Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>generate_plots</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, generates and saves diagnostic
+plots for each saved checkpoint. Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>checkpoint_path</strong> (<em>Path</em><em> | </em><em>None</em>) – <code class="docutils literal notranslate"><span class="pre">pathlib.Path</span></code> path object to the
+checkpoint to be resumed or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>read_args</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, parses CLI arguments inside
+<a class="reference internal" href="#modis.train.train_loop" title="modis.train.train_loop"><code class="xref py py-func docutils literal notranslate"><span class="pre">train_loop()</span></code></a>. Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path to the checkpoint directory, or <code class="docutils literal notranslate"><span class="pre">None</span></code>
+if the training loop did not produce any checkpoints.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pathlib.Path or None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="modis.train.train_loop">
+<span class="sig-name descname"><span class="pre">train_loop</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_datasets</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_datasets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show_dataset_summary</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">checkpoint_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">read_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/train.html#train_loop"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.train.train_loop" title="Link to this definition">¶</a></dt>
+<dd><p>Execute the core epoch-based training loop.</p>
+<p>Iterates over the training data for the configured number of epochs,
+performs training steps via <a class="reference internal" href="#modis.training.Trainer" title="modis.training.Trainer"><code class="xref py py-class docutils literal notranslate"><span class="pre">Trainer</span></code></a>, logs
+metrics, and saves checkpoints.</p>
+<p>If <code class="docutils literal notranslate"><span class="pre">read_args=True</span></code> and a <code class="docutils literal notranslate"><span class="pre">--checkpoint</span></code> argument is supplied on the
+command line, training resumes from that checkpoint.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>config</strong> (<em>omegaconf.DictConfig</em>) – Training configuration object.</p></li>
+<li><p><strong>train_datasets</strong> (<em>list</em><em>[</em><em>torch.utils.data.Dataset</em><em>]</em>) – Training datasets,
+one per modality.</p></li>
+<li><p><strong>val_datasets</strong> (<em>list</em><em>[</em><em>torch.utils.data.Dataset</em><em>]</em><em>, </em><em>optional</em>) – Validation
+datasets, one per modality. When provided, validation accuracy is
+computed each epoch and factored into the best-checkpoint
+criterion. Defaults to <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>show_dataset_summary</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, prints a dataset summary
+table before training begins. Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+<li><p><strong>checkpoint_path</strong> (<em>Path</em><em> | </em><em>None</em>) – <code class="docutils literal notranslate"><span class="pre">pathlib.Path</span></code> path object to the
+checkpoint to be resumed or <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>read_args</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, parses command-line arguments to check
+for a checkpoint path. Set to <code class="docutils literal notranslate"><span class="pre">False</span></code> when calling
+programmatically to avoid conflicts with <code class="docutils literal notranslate"><span class="pre">sys.argv</span></code>.
+Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path to the checkpoint directory if at least one
+checkpoint was saved; <code class="docutils literal notranslate"><span class="pre">None</span></code> otherwise.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pathlib.Path or None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="modis.train.parse_args">
+<span class="sig-name descname"><span class="pre">parse_args</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/train.html#parse_args"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.train.parse_args" title="Link to this definition">¶</a></dt>
+<dd><p>Parse command-line arguments for the training script.</p>
+<p>Currently supports a single optional argument:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">--checkpoint</span></code>: Path to a checkpoint file to resume training from.</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Parsed arguments namespace.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>argparse.Namespace</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+<section id="module-modis.training.trainer">
+<span id="trainer"></span><h2>Trainer<a class="headerlink" href="#module-modis.training.trainer" title="Link to this heading">¶</a></h2>
+<p>Trainer for the MODIS multi-modal model.</p>
+<p>This module contains the <a class="reference internal" href="#modis.training.Trainer" title="modis.training.trainer.Trainer"><code class="xref py py-class docutils literal notranslate"><span class="pre">Trainer</span></code></a> class, which orchestrates the
+training process. It manages the optimization loops, calculates various loss
+functions, and handles model checkpointing.</p>
+<p>The <a class="reference internal" href="#modis.training.Trainer" title="modis.training.trainer.Trainer"><code class="xref py py-class docutils literal notranslate"><span class="pre">Trainer</span></code></a> class is responsible for:</p>
+<ul class="simple">
+<li><p>Initializing the model, optimizers, and loss functions.</p></li>
+<li><p>Implementing the training loop for both the VAEs (generators) and the
+Discriminator.</p></li>
+<li><p>Calculating and backpropagating reconstruction, KL divergence, adversarial
+(relativistic), auxiliary, and clustering losses.</p></li>
+<li><p>Saving and loading model and optimizer states for checkpointing.</p></li>
+<li><p>Performing a single training step.</p></li>
+</ul>
+<dl class="py class">
+<dt class="sig sig-object py" id="modis.training.Trainer">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Trainer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/trainer.html#Trainer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.Trainer" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Manages the training and checkpointing process for MODIS.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>config</strong> (<em>omegaconf.DictConfig</em>) – Training configuration object. Must
+contain at least <code class="docutils literal notranslate"><span class="pre">learning_rate</span></code>, <code class="docutils literal notranslate"><span class="pre">beta1</span></code>, and all fields
+required by <a class="reference internal" href="nn.html#modis.nn.Model" title="modis.nn.Model"><code class="xref py py-class docutils literal notranslate"><span class="pre">Model</span></code></a>.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.Trainer.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">config</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/trainer.html#Trainer.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.Trainer.__init__" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.Trainer.save_checkpoint">
+<span class="sig-name descname"><span class="pre">save_checkpoint</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">best_epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">best_loss</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">val_acc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">timestamp</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">log</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">checkpoint_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_best</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/trainer.html#Trainer.save_checkpoint"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.Trainer.save_checkpoint" title="Link to this definition">¶</a></dt>
+<dd><p>Save the model and optimizer states to a checkpoint file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>epoch</strong> (<em>int</em>) – Current epoch index (0-based).</p></li>
+<li><p><strong>best_epoch</strong> (<em>int</em>) – Epoch index of the best-performing checkpoint.</p></li>
+<li><p><strong>best_loss</strong> (<em>float</em>) – Lowest generator loss achieved so far.</p></li>
+<li><p><strong>val_acc</strong> (<em>float</em>) – Validation accuracy associated with the best
+checkpoint.</p></li>
+<li><p><strong>timestamp</strong> (<em>str</em>) – Timestamp string identifying the training run
+(used as part of the checkpoint directory name).</p></li>
+<li><p><strong>config</strong> (<em>omegaconf.DictConfig</em>) – Training configuration to persist
+alongside the checkpoint.</p></li>
+<li><p><strong>log</strong> (<em>list</em><em>[</em><em>dict</em><em>]</em>) – List of per-epoch metric dictionaries to persist
+as a JSON log file.</p></li>
+<li><p><strong>save_path</strong> (<em>pathlib.Path</em>) – Base directory under which checkpoints
+are stored.</p></li>
+<li><p><strong>is_best</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, the checkpoint is saved as
+<code class="docutils literal notranslate"><span class="pre">checkpoint_best.pth</span></code>; otherwise as <code class="docutils literal notranslate"><span class="pre">checkpoint_latest.pth</span></code>.
+Defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, prints the path of the saved
+checkpoint. Defaults to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Path to the saved checkpoint file.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>pathlib.Path</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.Trainer.load_model_and_optimizer_states">
+<span class="sig-name descname"><span class="pre">load_model_and_optimizer_states</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">checkpoint_data</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/trainer.html#Trainer.load_model_and_optimizer_states"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.Trainer.load_model_and_optimizer_states" title="Link to this definition">¶</a></dt>
+<dd><p>Load model and optimizer states from a checkpoint dictionary.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>checkpoint_data</strong> (<em>dict</em>) – Dictionary containing <code class="docutils literal notranslate"><span class="pre">'model_state'</span></code>
+and <code class="docutils literal notranslate"><span class="pre">'optimizer_state'</span></code> keys, as produced by
+<a class="reference internal" href="#modis.training.Trainer.save_checkpoint" title="modis.training.Trainer.save_checkpoint"><code class="xref py py-meth docutils literal notranslate"><span class="pre">save_checkpoint()</span></code></a>.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.Trainer.zero_centered_gradient_penalty">
+<span class="sig-name descname"><span class="pre">zero_centered_gradient_penalty</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">modality_index</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/trainer.html#Trainer.zero_centered_gradient_penalty"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.Trainer.zero_centered_gradient_penalty" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the zero-centered gradient penalty for the discriminator.</p>
+<p>Regularises the discriminator by penalising large gradients with
+respect to the input, following the R1 regularisation scheme.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Input samples for the specified modality.</p></li>
+<li><p><strong>modality_index</strong> (<em>int</em>) – Index of the modality whose VAE encoder
+is used to obtain latents.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Scalar gradient penalty value.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.Trainer.train_step">
+<span class="sig-name descname"><span class="pre">train_step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_labeled</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/trainer.html#Trainer.train_step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.Trainer.train_step" title="Link to this definition">¶</a></dt>
+<dd><p>Perform a single training step for both the VAEs and the Discriminator.</p>
+<p>The step consists of two sequential phases:</p>
+<ol class="arabic simple">
+<li><p><strong>Discriminator phase</strong> — the VAEs are frozen and the discriminator
+is updated using adversarial, auxiliary, and clustering losses.</p></li>
+<li><p><strong>Generator phase</strong> — the discriminator is frozen and the VAEs are
+updated using reconstruction, KL divergence, and discriminator
+feedback losses.</p></li>
+</ol>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>list</em><em>[</em><em>torch.Tensor</em><em>]</em>) – Per-modality input tensors, each of shape
+<code class="docutils literal notranslate"><span class="pre">(batch_size,</span> <span class="pre">n_features)</span></code>.</p></li>
+<li><p><strong>y</strong> (<em>list</em><em>[</em><em>torch.Tensor</em><em>]</em>) – Per-modality label tensors of shape
+<code class="docutils literal notranslate"><span class="pre">(batch_size,)</span></code>. Unlabeled samples should carry label <code class="docutils literal notranslate"><span class="pre">-1</span></code>.</p></li>
+<li><p><strong>is_labeled</strong> (<em>list</em><em>[</em><em>torch.Tensor</em><em>]</em>) – Per-modality boolean tensors
+indicating which samples are labeled (<code class="docutils literal notranslate"><span class="pre">True</span></code>) or not
+(<code class="docutils literal notranslate"><span class="pre">False</span></code>).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p>A dictionary of scalar training metrics for this step:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">d_train_loss</span></code> (float): Total discriminator training loss.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">recon_loss</span></code> (float): Reconstruction loss across all modalities.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">kl_loss</span></code> (float): KL divergence loss across all modalities.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">d_loss</span></code> (float): Discriminator feedback loss used in the
+generator update.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">d_cluster_loss</span></code> (float): Clustering loss component.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">d_aux_acc</span></code> (float or None): Auxiliary classifier accuracy on
+labeled samples (<code class="docutils literal notranslate"><span class="pre">None</span></code> if no labeled samples are present).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">d_adv_acc</span></code> (float): Adversarial (modality) classifier accuracy.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">g_loss</span></code> (float): Total generator loss.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">r</span></code> (list[float]): Per-modality gradient penalty values (empty
+list when relativistic loss is disabled).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">modal_recon_loss</span></code> (list[float]): Per-modality reconstruction
+losses.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">modal_kl_loss</span></code> (list[float]): Per-modality KL divergence
+losses.</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>dict</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="module-modis.training.losses">
+<span id="loss-functions-modis-training-losses"></span><h2>Loss Functions (<code class="docutils literal notranslate"><span class="pre">modis.training.losses</span></code>)<a class="headerlink" href="#module-modis.training.losses" title="Link to this heading">¶</a></h2>
+<p>Loss functions for training MODIS.</p>
+<p>This module provides clustering and regularization loss functions used during
+training, including a Deep Divergence-Based Clustering (DDC) loss and an
+entropy regularization loss.</p>
+<p>The key components are:</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#modis.training.losses.DDCLoss" title="modis.training.losses.DDCLoss"><code class="xref py py-class docutils literal notranslate"><span class="pre">DDCLoss</span></code></a>: Implements the DDC loss, which encourages compact and
+separable clusters in the latent space.</p></li>
+<li><p><a class="reference internal" href="#modis.training.losses.EntropyLoss" title="modis.training.losses.EntropyLoss"><code class="xref py py-class docutils literal notranslate"><span class="pre">EntropyLoss</span></code></a>: A regularization loss that prevents the model from
+collapsing all samples into a single cluster.</p></li>
+<li><p><a class="reference internal" href="#modis.training.losses.ClusteringLoss" title="modis.training.losses.ClusteringLoss"><code class="xref py py-class docutils literal notranslate"><span class="pre">ClusteringLoss</span></code></a>: A combined loss summing the DDC and entropy
+regularization terms.</p></li>
+</ul>
+<p class="rubric">Classes</p>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#modis.training.losses.DDCLoss" title="modis.training.losses.DDCLoss"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DDCLoss</span></code></a></p></td>
+<td><p>Deep Divergence-Based Clustering (DDC) loss.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#modis.training.losses.EntropyLoss" title="modis.training.losses.EntropyLoss"><code class="xref py py-obj docutils literal notranslate"><span class="pre">EntropyLoss</span></code></a></p></td>
+<td><p>Entropy regularization loss.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#modis.training.losses.ClusteringLoss" title="modis.training.losses.ClusteringLoss"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ClusteringLoss</span></code></a></p></td>
+<td><p>Combined clustering loss (DDC + entropy regularization).</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="modis.training.losses.DDCLoss">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">DDCLoss</span></span><a class="reference internal" href="../_modules/modis/training/losses.html#DDCLoss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.DDCLoss" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Deep Divergence-Based Clustering (DDC) loss.</p>
+<p>Encourages both compactness and separability of clusters in the latent
+space. Inspired by <em>“Reconsidering Representation Alignment for
+Multi-View Clustering”</em> (Trosten et al., 2021).</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="modis.training.losses.DDCLoss.epsilon">
+<span class="sig-name descname"><span class="pre">epsilon</span></span><a class="headerlink" href="#modis.training.losses.DDCLoss.epsilon" title="Link to this definition">¶</a></dt>
+<dd><p>Small constant added for numerical stability.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.losses.DDCLoss.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/losses.html#DDCLoss.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.DDCLoss.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.losses.DDCLoss.kernel_matrix">
+<em class="property"><span class="k"><span class="pre">static</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">kernel_matrix</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epsilon</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1e-09</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/losses.html#DDCLoss.kernel_matrix"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.DDCLoss.kernel_matrix" title="Link to this definition">¶</a></dt>
+<dd><p>Compute a Gaussian kernel matrix.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>x</strong> (<em>torch.Tensor</em>) – Hidden-layer logits of shape
+<code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_features)</span></code>.</p></li>
+<li><p><strong>epsilon</strong> (<em>float</em>) – Small constant for numerical stability.
+Defaults to <code class="docutils literal notranslate"><span class="pre">1e-9</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Kernel matrix of shape <code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_samples)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.losses.DDCLoss.d_cs">
+<span class="sig-name descname"><span class="pre">d_cs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">K</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/losses.html#DDCLoss.d_cs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.DDCLoss.d_cs" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the <em>d</em> component of the Cauchy-Schwarz (CS) divergence.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>A</strong> (<em>torch.Tensor</em>) – Cluster assignment matrix of shape
+<code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_clusters)</span></code>.</p></li>
+<li><p><strong>K</strong> (<em>torch.Tensor</em>) – Similarity (kernel) matrix of shape
+<code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_samples)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Scalar <em>d</em> value of the CS divergence.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.losses.DDCLoss.calculate_m">
+<span class="sig-name descname"><span class="pre">calculate_m</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">A</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/losses.html#DDCLoss.calculate_m"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.DDCLoss.calculate_m" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the <em>m</em> matrix for the DDC loss.</p>
+<p>The <em>m</em> matrix pushes cluster assignment vectors close to the standard
+simplex, encouraging more balanced cluster assignments.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>A</strong> (<em>torch.Tensor</em>) – Cluster assignment logits of shape
+<code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_clusters)</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The <em>m</em> matrix of shape <code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_clusters)</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.losses.DDCLoss.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hidden_layer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aux_layer</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/losses.html#DDCLoss.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.DDCLoss.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the DDC loss.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hidden_layer</strong> (<em>torch.Tensor</em>) – Logits from the penultimate hidden
+layer, shape <code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_features)</span></code>.</p></li>
+<li><p><strong>aux_layer</strong> (<em>torch.Tensor</em>) – Cluster assignment logits from the output
+layer, shape <code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_clusters)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Scalar DDC loss value.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><p><strong>ValueError</strong> – If the number of samples in <code class="docutils literal notranslate"><span class="pre">hidden_layer</span></code> and
+    <code class="docutils literal notranslate"><span class="pre">aux_layer</span></code> do not match.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="modis.training.losses.EntropyLoss">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">EntropyLoss</span></span><a class="reference internal" href="../_modules/modis/training/losses.html#EntropyLoss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.EntropyLoss" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Entropy regularization loss.</p>
+<p>Prevents degenerate solutions where all samples are assigned to a single
+cluster by encouraging a more uniform distribution of samples across
+clusters.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="modis.training.losses.EntropyLoss.eps">
+<span class="sig-name descname"><span class="pre">eps</span></span><a class="headerlink" href="#modis.training.losses.EntropyLoss.eps" title="Link to this definition">¶</a></dt>
+<dd><p>Small constant for numerical stability.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>float</p>
+</dd>
+</dl>
+</dd></dl>
+
+<p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.losses.EntropyLoss.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/losses.html#EntropyLoss.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.EntropyLoss.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.losses.EntropyLoss.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">logits</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/losses.html#EntropyLoss.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.EntropyLoss.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the entropy regularization loss.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>logits</strong> (<em>torch.Tensor</em>) – Output logits of shape
+<code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_clusters)</span></code>.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Scalar entropy loss value.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="modis.training.losses.ClusteringLoss">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ClusteringLoss</span></span><a class="reference internal" href="../_modules/modis/training/losses.html#ClusteringLoss"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.ClusteringLoss" title="Link to this definition">¶</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Module</span></code></p>
+<p>Combined clustering loss (DDC + entropy regularization).</p>
+<p>Balances the goals of creating compact and separable clusters
+(<a class="reference internal" href="#modis.training.losses.DDCLoss" title="modis.training.losses.DDCLoss"><code class="xref py py-class docutils literal notranslate"><span class="pre">DDCLoss</span></code></a>) with a uniform distribution of samples across clusters
+(<a class="reference internal" href="#modis.training.losses.EntropyLoss" title="modis.training.losses.EntropyLoss"><code class="xref py py-class docutils literal notranslate"><span class="pre">EntropyLoss</span></code></a>).</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="modis.training.losses.ClusteringLoss.ddc_loss">
+<span class="sig-name descname"><span class="pre">ddc_loss</span></span><a class="headerlink" href="#modis.training.losses.ClusteringLoss.ddc_loss" title="Link to this definition">¶</a></dt>
+<dd><p>Instance of the DDC loss module.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#modis.training.losses.DDCLoss" title="modis.training.losses.DDCLoss">DDCLoss</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="modis.training.losses.ClusteringLoss.entropy_loss">
+<span class="sig-name descname"><span class="pre">entropy_loss</span></span><a class="headerlink" href="#modis.training.losses.ClusteringLoss.entropy_loss" title="Link to this definition">¶</a></dt>
+<dd><p>Instance of the entropy regularization module.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="#modis.training.losses.EntropyLoss" title="modis.training.losses.EntropyLoss">EntropyLoss</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.losses.ClusteringLoss.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/losses.html#ClusteringLoss.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.ClusteringLoss.__init__" title="Link to this definition">¶</a></dt>
+<dd><p>Initialize internal Module state, shared by both nn.Module and ScriptModule.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="modis.training.losses.ClusteringLoss.forward">
+<span class="sig-name descname"><span class="pre">forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">aux_layer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_layer</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/modis/training/losses.html#ClusteringLoss.forward"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#modis.training.losses.ClusteringLoss.forward" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the combined clustering loss.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>aux_layer</strong> (<em>torch.Tensor</em>) – Cluster assignment logits from the output
+layer, shape <code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_clusters)</span></code>.</p></li>
+<li><p><strong>hidden_layer</strong> (<em>torch.Tensor</em>) – Logits from the penultimate hidden
+layer, shape <code class="docutils literal notranslate"><span class="pre">(n_samples,</span> <span class="pre">n_features)</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Scalar combined DDC and entropy loss.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>torch.Tensor</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          <a class="next-page" href="utils.html">
+              <div class="page-info">
+                <div class="context">
+                  <span>Next</span>
+                </div>
+                <div class="title">Utilities (<code class="docutils literal notranslate"><span class="pre">modis.utils</span></code>)</div>
+              </div>
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+            </a>
+          <a class="prev-page" href="nn.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Neural Network (<code class="docutils literal notranslate"><span class="pre">modis.nn</span></code>)</div>
+                
+              </div>
+            </a>
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, MODIS Contributors
+            </div>
+            Made with 
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Training (<code class="docutils literal notranslate"><span class="pre">modis.training</span></code>)</a><ul>
+<li><a class="reference internal" href="#top-level-functions">Top-Level Functions</a><ul>
+<li><a class="reference internal" href="#modis.train.train"><code class="docutils literal notranslate"><span class="pre">train()</span></code></a></li>
+<li><a class="reference internal" href="#modis.train.train_loop"><code class="docutils literal notranslate"><span class="pre">train_loop()</span></code></a></li>
+<li><a class="reference internal" href="#modis.train.parse_args"><code class="docutils literal notranslate"><span class="pre">parse_args()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-modis.training.trainer">Trainer</a><ul>
+<li><a class="reference internal" href="#modis.training.Trainer"><code class="docutils literal notranslate"><span class="pre">Trainer</span></code></a><ul>
+<li><a class="reference internal" href="#modis.training.Trainer.__init__"><code class="docutils literal notranslate"><span class="pre">Trainer.__init__()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.Trainer.save_checkpoint"><code class="docutils literal notranslate"><span class="pre">Trainer.save_checkpoint()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.Trainer.load_model_and_optimizer_states"><code class="docutils literal notranslate"><span class="pre">Trainer.load_model_and_optimizer_states()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.Trainer.zero_centered_gradient_penalty"><code class="docutils literal notranslate"><span class="pre">Trainer.zero_centered_gradient_penalty()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.Trainer.train_step"><code class="docutils literal notranslate"><span class="pre">Trainer.train_step()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#module-modis.training.losses">Loss Functions (<code class="docutils literal notranslate"><span class="pre">modis.training.losses</span></code>)</a><ul>
+<li><a class="reference internal" href="#modis.training.losses.DDCLoss"><code class="docutils literal notranslate"><span class="pre">DDCLoss</span></code></a><ul>
+<li><a class="reference internal" href="#modis.training.losses.DDCLoss.epsilon"><code class="docutils literal notranslate"><span class="pre">DDCLoss.epsilon</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.DDCLoss.__init__"><code class="docutils literal notranslate"><span class="pre">DDCLoss.__init__()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.DDCLoss.kernel_matrix"><code class="docutils literal notranslate"><span class="pre">DDCLoss.kernel_matrix()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.DDCLoss.d_cs"><code class="docutils literal notranslate"><span class="pre">DDCLoss.d_cs()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.DDCLoss.calculate_m"><code class="docutils literal notranslate"><span class="pre">DDCLoss.calculate_m()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.DDCLoss.forward"><code class="docutils literal notranslate"><span class="pre">DDCLoss.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#modis.training.losses.EntropyLoss"><code class="docutils literal notranslate"><span class="pre">EntropyLoss</span></code></a><ul>
+<li><a class="reference internal" href="#modis.training.losses.EntropyLoss.eps"><code class="docutils literal notranslate"><span class="pre">EntropyLoss.eps</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.EntropyLoss.__init__"><code class="docutils literal notranslate"><span class="pre">EntropyLoss.__init__()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.EntropyLoss.forward"><code class="docutils literal notranslate"><span class="pre">EntropyLoss.forward()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#modis.training.losses.ClusteringLoss"><code class="docutils literal notranslate"><span class="pre">ClusteringLoss</span></code></a><ul>
+<li><a class="reference internal" href="#modis.training.losses.ClusteringLoss.ddc_loss"><code class="docutils literal notranslate"><span class="pre">ClusteringLoss.ddc_loss</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.ClusteringLoss.entropy_loss"><code class="docutils literal notranslate"><span class="pre">ClusteringLoss.entropy_loss</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.ClusteringLoss.__init__"><code class="docutils literal notranslate"><span class="pre">ClusteringLoss.__init__()</span></code></a></li>
+<li><a class="reference internal" href="#modis.training.losses.ClusteringLoss.forward"><code class="docutils literal notranslate"><span class="pre">ClusteringLoss.forward()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=01f34227"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>
