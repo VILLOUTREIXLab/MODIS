@@ -77,6 +77,8 @@ def train_loop(
             criterion. Defaults to ``None``.
         show_dataset_summary (bool): If ``True``, prints a dataset summary
             table before training begins. Defaults to ``True``.
+        checkpoint_path (Path | None): ``pathlib.Path`` path object to the 
+            checkpoint to be resumed or ``None``.
         read_args (bool): If ``True``, parses command-line arguments to check
             for a checkpoint path. Set to ``False`` when calling
             programmatically to avoid conflicts with ``sys.argv``.
@@ -268,6 +270,8 @@ def train(
             Defaults to ``True``.
         generate_plots (bool): If ``True``, generates and saves diagnostic
             plots for each saved checkpoint. Defaults to ``True``.
+        checkpoint_path (Path | None): ``pathlib.Path`` path object to the 
+            checkpoint to be resumed or ``None``.
         read_args (bool): If ``True``, parses CLI arguments inside
             :func:`train_loop`. Defaults to ``True``.
 

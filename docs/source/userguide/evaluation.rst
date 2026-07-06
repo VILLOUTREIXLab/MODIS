@@ -19,6 +19,18 @@ on one or more DataLoaders:
    from modis.utils.evaluation import evaluate_model
    from modis.utils.data import get_dataloaders
 
+   # Random synthetic two-modality data — replace with your real validation datasets
+   N, d_A, d_B = 200, 128, 256
+
+   X_A = torch.randn(N, d_A)
+   X_B = torch.randn(N, d_B)
+   labels = torch.randint(0, 10, (N,))
+
+   val_datasets = [
+    TensorDataset(X_A, labels),
+    TensorDataset(X_B, labels),
+   ]
+
    config = load_config(checkpoint_dir / "config.yaml")
    model = Model(config)
    model.load_from_checkpoint(checkpoint_dir / "checkpoint_best.pth")

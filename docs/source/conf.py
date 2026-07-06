@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath('../'))
 
 # -- Project information ------------------------------------------------------
 project = "MODIS"
-copyright = "2024, MODIS Contributors"
+copyright = "2026, MODIS Contributors"
 author = "MODIS Contributors"
 release = "0.1.0"
 version = "0.1"
@@ -65,14 +65,14 @@ intersphinx_mapping = {
 todo_include_todos = True
 
 # -- Options for HTML output --------------------------------------------------
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo" #"sphinx_rtd_theme"
 html_static_path = ["_static"]
-html_theme_options = {
-    "navigation_depth": 4,
-    "titles_only": False,
-    "collapse_navigation": False,
-    "sticky_navigation": True,
-}
+# html_theme_options = {
+#     "navigation_depth": 4,
+#     "titles_only": False,
+#     "collapse_navigation": False,
+#     "sticky_navigation": True,
+# }
 html_title = "MODIS Documentation"
 html_show_sourcelink = True
 html_show_sphinx = False

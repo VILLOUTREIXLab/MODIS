@@ -1,6 +1,10 @@
-# MODIS: Multi-omics Data Integration for Small and unpaired datasets
+# MODIS: Multi-Omics Data Integration for Small and unpaired datasets
 
 MODIS performs diagonal integration on unpaired samples by learning a probabilistic coupling of the heterogeneous data modalities into a shared latent space, leveraging class-labels to align modalities despite class imbalance and data scarcity.
+
+## Documentation
+
+Available at [https://villoutreixlab.github.io/MODIS/](https://villoutreixlab.github.io/MODIS/).
 
 ##  Installation
 

@@ -11,6 +11,9 @@ MODIS provides two entry points for training:
   by ``train``; useful when you want fine-grained control over post-training
   steps.
 
+It is recommended to train the model until the reconstruction loss plateaus.
+
+
 High-Level Training with ``train``
 ------------------------------------
 
@@ -26,6 +29,7 @@ High-Level Training with ``train``
        show_dataset_summary=True,
        run_evaluation=True,
        generate_plots=True,
+       checkpoint_path=None,
        read_args=False,             # always False when calling programmatically
    )
 
@@ -53,6 +57,8 @@ Arguments
        ``checkpoints_evaluation_metrics.json`` file.
    * - ``generate_plots``
      - After training, generates diagnostic plots for each saved checkpoint.
+   * - ``checkpoint_path``
+     - ``pathlib.Path`` path object to the checkpoint to be resumed or ``None``.
    * - ``read_args``
      - When ``True``, ``argparse`` is used to read ``--checkpoint`` from
        ``sys.argv`` (intended for CLI use).  Set to ``False`` in notebooks
@@ -92,23 +98,23 @@ The following metrics are printed each epoch:
    * - ``val_acc``
      - Validation accuracy (only printed when ``val_datasets`` is provided).
 
-Command-Line Training
----------------------
+.. Command-Line Training
+.. ---------------------
 
-The training script can also be invoked directly from the command line.
-The ``--checkpoint`` flag resumes training from a saved checkpoint:
+.. The training script can also be invoked directly from the command line.
+.. The ``--checkpoint`` flag resumes training from a saved checkpoint:
 
-.. code-block:: bash
+.. .. code-block:: bash
 
-   python -m modis.train --checkpoint ./saved/checkpoints/my_dataset/modis_v1/20240101_120000/checkpoint_best.pth
+..    python -m modis.train --checkpoint ./saved/checkpoints/my_dataset/modis_v1/20240101_120000/checkpoint_best.pth
 
-When ``--checkpoint`` is supplied:
+.. When ``--checkpoint`` is supplied:
 
-- Model and optimiser states are restored.
-- The training log from the checkpoint run is reloaded.
-- The original configuration file is loaded from the checkpoint directory
-  (any ``config`` argument passed programmatically is ignored).
-- Training continues from ``checkpoint['epoch'] + 1``.
+.. - Model and optimiser states are restored.
+.. - The training log from the checkpoint run is reloaded.
+.. - The original configuration file is loaded from the checkpoint directory
+..   (any ``config`` argument passed programmatically is ignored).
+.. - Training continues from ``checkpoint['epoch'] + 1``.
 
 Checkpoint Saving Strategy
 ---------------------------

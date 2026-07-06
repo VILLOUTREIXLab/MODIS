@@ -9,3 +9,5 @@ plotly
 kaleido
 seaborn
 standard-imghdr
+sphinx
+furo

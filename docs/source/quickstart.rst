@@ -4,7 +4,9 @@ Quickstart
 ==========
 
 This page walks through a minimal end-to-end example: defining a
-configuration, preparing datasets, training a model, and evaluating it.
+configuration, preparing datasets, training a model, predicting and
+doing cross-modal translations.
+
 
 Step 1 — Define a Configuration
 --------------------------------
@@ -13,7 +15,6 @@ Create a YAML file (e.g., ``config.yaml``) describing your experiment:
 
 .. code-block:: yaml
 
-   # config.yaml
    dataset_name: my_dataset
    model_name: modis_v1
 
@@ -59,7 +60,8 @@ Step 2 — Prepare Datasets
 
 MODIS expects standard ``torch.utils.data.Dataset`` objects that return
 ``(features, label)`` pairs. Use label ``-1`` for unlabeled samples in
-semi-supervised mode.
+semi-supervised mode. Create the file ``main.py`` with the code snippets
+from this and the following sections.
 
 .. code-block:: python
 
@@ -127,10 +129,13 @@ After training, load the best checkpoint and generate predictions:
    predictions = model.predict(x_new, input_modality=0)
    print(predictions)  # tensor of shape (32,)
 
+The ``predictions`` variable contains the class prediction for each sample.
+
 Step 5 — Cross-Modal Translation
 ---------------------------------
 
-Translate samples from modality A into modality B's feature space:
+Translate samples from modality A into modality B's feature space. The 
+modalities are numbered from ``0`` to ``n`` in the same order as in the config file:
 
 .. code-block:: python
 

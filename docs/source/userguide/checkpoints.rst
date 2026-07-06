@@ -77,29 +77,29 @@ Loading from a State Dictionary
    checkpoint_data = load_checkpoint(checkpoint_dir / "checkpoint_best.pth")
    model.load_from_state_dict(checkpoint_data["model_state"])
 
-Resuming Training
------------------
+.. Resuming Training
+.. -----------------
 
-Training can be resumed from the command line using the ``--checkpoint``
-argument:
+.. Training can be resumed from the command line using the ``--checkpoint``
+.. argument:
 
-.. code-block:: bash
+.. .. code-block:: bash
 
-   python -m modis.train \
-       --checkpoint ./saved/checkpoints/pbmc_cite/run_01/20240501_143022/checkpoint_best.pth
+..    python -m modis.train \
+..        --checkpoint ./saved/checkpoints/pbmc_cite/run_01/20240501_143022/checkpoint_best.pth
 
-MODIS will:
+.. MODIS will:
 
-1. Load model and optimiser states from the checkpoint.
-2. Reload the training log from ``checkpoint_log_best.json`` (or
-   ``checkpoint_log_latest.json``).
-3. Read ``config.yaml`` from the checkpoint directory.
-4. Continue training from ``checkpoint['epoch'] + 1``.
+.. 1. Load model and optimiser states from the checkpoint.
+.. 2. Reload the training log from ``checkpoint_log_best.json`` (or
+..    ``checkpoint_log_latest.json``).
+.. 3. Read ``config.yaml`` from the checkpoint directory.
+.. 4. Continue training from ``checkpoint['epoch'] + 1``.
 
-.. warning::
+.. .. warning::
 
-   When resuming, the ``config.yaml`` in the checkpoint directory is always
-   used — any configuration file passed programmatically is overridden.
+..    When resuming, the ``config.yaml`` in the checkpoint directory is always
+..    used — any configuration file passed programmatically is overridden.
 
 Training Logs
 -------------

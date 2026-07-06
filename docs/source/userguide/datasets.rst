@@ -110,11 +110,11 @@ When validation datasets are provided:
    Validation datasets should contain **only labeled** samples (no ``-1``
    labels), as the evaluation metrics are computed over labeled data only.
 
-Data Normalisation
+Data Preprocessing
 ------------------
 
 MODIS does not apply any data normalisation internally.  It is strongly
-recommended to standardise or normalise your features before training:
+recommended to standardise your features before training:
 
 .. code-block:: python
 
